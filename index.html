@@ -342,6 +342,25 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
     <span style="font-size:13px;color:var(--muted)">Triggers a banner on the dashboard when exceeded</span>
   </div>
   <div class="alert-grid" id="alert-cards"></div>
+  <!-- Email settings card -->
+  <div class="alert-card" style="border-left:3px solid var(--accent);margin-bottom:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <div class="alert-name">📧 Email Alerts</div>
+        <div class="alert-desc">Receive an email when any enabled threshold is exceeded. Max 1 email per 10 minutes.</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="email-enabled" onchange="saveEmailEnabled(this.checked)"/>
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+    <div id="email-input-row" style="margin-top:12px;display:none;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="email" id="alert-email" class="thresh-input" style="width:240px;font-family:var(--sans);font-size:13px;text-align:left" placeholder="your@email.com" oninput="saveEmail(this.value)"/>
+      <button class="btn-sm" onclick="testEmail()" id="test-email-btn">Send test email</button>
+      <span id="email-status" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+  </div>
+
   <div class="alert-card"><div class="alert-name" style="margin-bottom:.75rem;font-size:14px;font-weight:600">Alert Log</div><div class="log-box" id="alert-log"><div style="color:var(--muted)">No alerts fired yet.</div></div></div>
 </div>
 </div>
@@ -721,16 +740,19 @@ async function fetchLive(){
 // ── Alerts ────────────────────────────────────────────────
 function checkAlerts(vals,ts){
   const fired=[];
+  const firedAlerts=[];
   ALERTS_DEF.forEach(a=>{
     if(!enabled[a.id])return;const v=vals[a.id];if(v===null)return;
     if(v>thr[a.id]){
       fired.push(`${a.label}: ${v.toFixed(1)} ${a.unit} (limit: ${thr[a.id]})`);
+      firedAlerts.push(a);
       const entry={time:fmtTimestamp(ts.toISOString()),msg:`${a.label} ${v.toFixed(1)} ${a.unit} exceeded ${thr[a.id]}`};
       if(!alertLog.find(x=>x.msg===entry.msg&&x.time===entry.time)){alertLog.unshift(entry);if(alertLog.length>40)alertLog.pop();renderLog();}
     }
   });
   document.getElementById('alert-list').innerHTML=fired.map(t=>`<li>${t}</li>`).join('');
   document.getElementById('alert-banner').style.display=fired.length?'block':'none';
+  if(firedAlerts.length) sendEmailAlert(firedAlerts, vals);
 }
 function renderLog(){
   const el=document.getElementById('alert-log');if(!el)return;
@@ -893,12 +915,107 @@ async function sendChat(){
   document.getElementById('chat-msgs').scrollTop=99999;
 }
 
+// ── Email alerts ──────────────────────────────────────────
+let lastEmailSent = 0;
+const EMAIL_COOLDOWN = 10 * 60 * 1000; // 10 minutes
+
+function saveEmailEnabled(val) {
+  localStorage.setItem('email_enabled', val);
+  document.getElementById('email-input-row').style.display = val ? 'flex' : 'none';
+}
+function saveEmail(val) {
+  localStorage.setItem('alert_email', val);
+}
+function initEmailUI() {
+  const enabled = localStorage.getItem('email_enabled') === 'true';
+  const email = localStorage.getItem('alert_email') || '';
+  document.getElementById('email-enabled').checked = enabled;
+  document.getElementById('alert-email').value = email;
+  document.getElementById('email-input-row').style.display = enabled ? 'flex' : 'none';
+}
+
+function buildEmailPayload(firedAlerts, currentVals) {
+  const SENSOR_META = {
+    temp: { icon:'🌡️', label:'Temperature', unit:'°C' },
+    hum:  { icon:'💧', label:'Humidity',    unit:'%'  },
+    pres: { icon:'🔵', label:'Pressure',    unit:'hPa'},
+    co2:  { icon:'🌿', label:'CO₂',         unit:'ppm'},
+    pm:   { icon:'💨', label:'PM2.5',       unit:'µg/m³'},
+    snd:  { icon:'🔊', label:'Sound',       unit:'dB' },
+  };
+  const BADGE = {
+    'bg-good':{ bg:'#d5f5e3', c:'#0e5a28' },
+    'bg-ok':  { bg:'#fef9e7', c:'#7a4d00' },
+    'bg-warn':{ bg:'#fdebd0', c:'#7a3300' },
+    'bg-bad': { bg:'#fdecea', c:'#7a1515' },
+  };
+  const alerts = firedAlerts.map(a => {
+    const m = SENSOR_META[a.id];
+    const v = currentVals[a.id];
+    const [status, cls] = ST[a.id](v);
+    const b = BADGE[cls] || BADGE['bg-ok'];
+    return { id:a.id, icon:m.icon, label:m.label, unit:m.unit,
+      value: v !== null ? v.toFixed(a.id==='co2'||a.id==='pres'?0:1) : '—',
+      threshold: thr[a.id], status, badgeBg:b.bg, badgeColor:b.c };
+  });
+  const readings = Object.keys(SENSOR_META).map(id => {
+    const m = SENSOR_META[id]; const v = currentVals[id];
+    if (v === null) return null;
+    const [status, cls] = ST[id](v);
+    const b = BADGE[cls] || BADGE['bg-ok'];
+    return { icon:m.icon, label:m.label, unit:m.unit,
+      value: v.toFixed(id==='co2'||id==='pres'?0:1),
+      status, badgeBg:b.bg, badgeColor:b.c };
+  }).filter(Boolean);
+  return { alerts, readings };
+}
+
+async function sendEmailAlert(firedAlerts, currentVals) {
+  const enabled = localStorage.getItem('email_enabled') === 'true';
+  const toEmail = localStorage.getItem('alert_email') || '';
+  if (!enabled || !toEmail) return;
+  if (Date.now() - lastEmailSent < EMAIL_COOLDOWN) return; // cooldown
+  lastEmailSent = Date.now();
+  const payload = buildEmailPayload(firedAlerts, currentVals);
+  try {
+    const r = await fetch('/api/alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, toEmail }),
+    });
+    const d = await r.json();
+    const el = document.getElementById('email-status');
+    if (el) { el.textContent = d.success ? '✅ Email sent!' : '❌ Failed'; setTimeout(()=>{ if(el) el.textContent=''; }, 4000); }
+  } catch(e) { console.error('Email alert failed:', e); }
+}
+
+async function testEmail() {
+  const toEmail = document.getElementById('alert-email').value.trim();
+  if (!toEmail) { alert('Enter your email address first'); return; }
+  const btn = document.getElementById('test-email-btn');
+  const status = document.getElementById('email-status');
+  btn.disabled = true; btn.textContent = 'Sending...';
+  // Send a fake test alert
+  const testPayload = {
+    alerts: [{ id:'co2', icon:'🌿', label:'CO₂ (Test)', unit:'ppm', value:'1250', threshold:1000, status:'Poor', badgeBg:'#fdebd0', badgeColor:'#7a3300' }],
+    readings: [{ icon:'🌿', label:'CO₂ (Test)', unit:'ppm', value:'1250', status:'Poor', badgeBg:'#fdebd0', badgeColor:'#7a3300' }],
+    toEmail,
+  };
+  try {
+    const r = await fetch('/api/alert', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(testPayload) });
+    const d = await r.json();
+    status.textContent = d.success ? '✅ Test email sent! Check your inbox.' : '❌ Failed: '+JSON.stringify(d.error);
+  } catch(e) { status.textContent = '❌ Network error'; }
+  btn.disabled = false; btn.textContent = 'Send test email';
+  setTimeout(() => { status.textContent = ''; }, 6000);
+}
+
 // ── Init ──────────────────────────────────────────────────
 charts.temp=mkChart('c-temp','Temp','#e74c3c','°C');
 charts.hum=mkChart('c-hum','Humidity','#2980b9','%');
 charts.co2=mkChart('c-co2','CO₂','#27ae60','ppm');
 charts.pm=mkChart('c-pm','PM2.5','#d4a017',' µg/m³');
-buildAlertCards();renderLog();
+buildAlertCards();renderLog();initEmailUI();
 fetchLive();
 setInterval(fetchLive,30000);
 </script>
