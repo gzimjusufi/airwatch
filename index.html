@@ -184,6 +184,27 @@ nav{position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-co
 .chat-send:hover{opacity:.85}
 .chat-send:disabled{opacity:.4;cursor:not-allowed}
 
+
+/* ARCHITECTURE */
+.arch-diagram{display:flex;flex-direction:column;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem;box-shadow:var(--shadow);margin-bottom:1rem}
+.arch-layer{display:flex;flex-direction:column;align-items:center;gap:12px}
+.arch-layer-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-family:var(--mono);background:var(--surface2);padding:4px 14px;border-radius:999px;border:1px solid var(--border)}
+.arch-layer-cards{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.arch-chip{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem 1rem;text-align:center;min-width:100px;transition:transform .2s,box-shadow .2s}
+.arch-chip:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.arch-chip-icon{font-size:20px;margin-bottom:4px}
+.arch-chip-name{font-size:12px;font-weight:700;font-family:var(--mono);margin-bottom:3px}
+.arch-chip-desc{font-size:10px;color:var(--muted);line-height:1.4}
+.arch-chip.sensor{border-top:3px solid #2980b9}
+.arch-chip.mcu{border-top:3px solid var(--accent);background:linear-gradient(135deg,var(--surface2),var(--surface))}
+.arch-chip.display{border-top:3px solid #8e44ad}
+.arch-chip.cloud{border-top:3px solid #e67e22}
+.arch-chip.web{border-top:3px solid var(--accent)}
+.arch-chip.user{border-top:3px solid #2980b9}
+.arch-arrow-row{display:flex;justify-content:center;padding:.75rem 0}
+.arch-arrow{font-size:12px;color:var(--muted);font-family:var(--mono);background:var(--surface2);border:1px dashed var(--border);padding:5px 18px;border-radius:999px}
+@media(max-width:640px){.arch-layer-cards{gap:6px}.arch-chip{min-width:80px;padding:.6rem .7rem}.arch-chip-name{font-size:10px}.arch-chip-desc{display:none}}
+
 /* FOOTER */
 footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-family:var(--mono);border-top:1px solid var(--border)}
 
@@ -215,6 +236,7 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
     <button class="nav-tab active" onclick="showPage('dashboard',this)">Dashboard</button>
     <button class="nav-tab" onclick="showPage('history',this)">History</button>
     <button class="nav-tab" onclick="showPage('alerts',this)">Alerts</button>
+    <button class="nav-tab" onclick="showPage('arch',this)">Architecture</button>
     <button class="nav-tab" onclick="showPage('about',this)">About</button>
   </div>
   <div class="nav-right">
@@ -235,6 +257,7 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
   <button class="mob-tab active" onclick="showPage('dashboard',this);closeMobNav()">Dashboard</button>
   <button class="mob-tab" onclick="showPage('history',this);closeMobNav()">History</button>
   <button class="mob-tab" onclick="showPage('alerts',this);closeMobNav()">Alerts</button>
+  <button class="mob-tab" onclick="showPage('arch',this);closeMobNav()">Architecture</button>
   <button class="mob-tab" onclick="showPage('about',this);closeMobNav()">About</button>
 </div>
 
@@ -320,6 +343,179 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
   </div>
   <div class="alert-grid" id="alert-cards"></div>
   <div class="alert-card"><div class="alert-name" style="margin-bottom:.75rem;font-size:14px;font-weight:600">Alert Log</div><div class="log-box" id="alert-log"><div style="color:var(--muted)">No alerts fired yet.</div></div></div>
+</div>
+</div>
+
+
+<!-- ARCHITECTURE -->
+<div class="page" id="page-arch">
+<div class="container">
+  <div class="page-header">
+    <h2>System Architecture</h2>
+    <span style="font-size:13px;color:var(--muted)">How AirWatch works end-to-end</span>
+  </div>
+
+  <!-- LAYER DIAGRAM -->
+  <div class="arch-diagram">
+
+    <!-- Layer 1: Sensors -->
+    <div class="arch-layer">
+      <div class="arch-layer-label">SENSOR LAYER</div>
+      <div class="arch-layer-cards">
+        <div class="arch-chip sensor">
+          <div class="arch-chip-icon">🌡️</div>
+          <div class="arch-chip-name">AHT20</div>
+          <div class="arch-chip-desc">Temp + Humidity<br>I²C</div>
+        </div>
+        <div class="arch-chip sensor">
+          <div class="arch-chip-icon">🔵</div>
+          <div class="arch-chip-name">BMP280</div>
+          <div class="arch-chip-desc">Pressure<br>I²C</div>
+        </div>
+        <div class="arch-chip sensor">
+          <div class="arch-chip-icon">🌿</div>
+          <div class="arch-chip-name">SCD40</div>
+          <div class="arch-chip-desc">CO₂<br>I²C</div>
+        </div>
+        <div class="arch-chip sensor">
+          <div class="arch-chip-icon">💨</div>
+          <div class="arch-chip-name">PMS5003</div>
+          <div class="arch-chip-desc">PM2.5<br>UART</div>
+        </div>
+        <div class="arch-chip sensor">
+          <div class="arch-chip-icon">🔊</div>
+          <div class="arch-chip-name">MAX4466</div>
+          <div class="arch-chip-desc">Sound<br>ADC</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-arrow-row"><div class="arch-arrow">↓ I²C / UART / ADC</div></div>
+
+    <!-- Layer 2: MCU -->
+    <div class="arch-layer">
+      <div class="arch-layer-label">PROCESSING LAYER</div>
+      <div class="arch-layer-cards">
+        <div class="arch-chip mcu" style="min-width:220px">
+          <div class="arch-chip-icon">⚡</div>
+          <div class="arch-chip-name">ESP32 CP2102</div>
+          <div class="arch-chip-desc">Reads all sensors · runs Arduino C++ firmware<br>Dual-core 240MHz · Wi-Fi · Bluetooth</div>
+        </div>
+        <div class="arch-chip display">
+          <div class="arch-chip-icon">📺</div>
+          <div class="arch-chip-name">OLED 0.96″</div>
+          <div class="arch-chip-desc">Live display<br>SSD1306 I²C</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-arrow-row"><div class="arch-arrow">↓ HTTP over Wi-Fi (every 15s)</div></div>
+
+    <!-- Layer 3: Cloud -->
+    <div class="arch-layer">
+      <div class="arch-layer-label">CLOUD LAYER</div>
+      <div class="arch-layer-cards">
+        <div class="arch-chip cloud" style="min-width:260px">
+          <div class="arch-chip-icon">☁️</div>
+          <div class="arch-chip-name">ThingSpeak</div>
+          <div class="arch-chip-desc">Time-series data storage · Channel #3389722<br>6 fields · REST API · free tier</div>
+        </div>
+        <div class="arch-chip cloud">
+          <div class="arch-chip-icon">🤖</div>
+          <div class="arch-chip-name">Groq AI</div>
+          <div class="arch-chip-desc">llama-3.3-70b<br>Chat API</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-arrow-row"><div class="arch-arrow">↓ REST API / HTTPS</div></div>
+
+    <!-- Layer 4: Web -->
+    <div class="arch-layer">
+      <div class="arch-layer-label">PRESENTATION LAYER</div>
+      <div class="arch-layer-cards">
+        <div class="arch-chip web">
+          <div class="arch-chip-icon">📊</div>
+          <div class="arch-chip-name">Dashboard</div>
+          <div class="arch-chip-desc">Live cards<br>AQI · Charts</div>
+        </div>
+        <div class="arch-chip web">
+          <div class="arch-chip-icon">📈</div>
+          <div class="arch-chip-name">History</div>
+          <div class="arch-chip-desc">24h / 7d<br>CSV export</div>
+        </div>
+        <div class="arch-chip web">
+          <div class="arch-chip-icon">🔔</div>
+          <div class="arch-chip-name">Alerts</div>
+          <div class="arch-chip-desc">Thresholds<br>Live banner</div>
+        </div>
+        <div class="arch-chip web">
+          <div class="arch-chip-icon">💬</div>
+          <div class="arch-chip-name">AI Chat</div>
+          <div class="arch-chip-desc">Groq proxy<br>Secure key</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-arrow-row"><div class="arch-arrow">↓ Vercel CDN</div></div>
+
+    <!-- Layer 5: User -->
+    <div class="arch-layer">
+      <div class="arch-layer-label">USER LAYER</div>
+      <div class="arch-layer-cards">
+        <div class="arch-chip user">
+          <div class="arch-chip-icon">🖥️</div>
+          <div class="arch-chip-name">Desktop</div>
+          <div class="arch-chip-desc">Any browser</div>
+        </div>
+        <div class="arch-chip user">
+          <div class="arch-chip-icon">📱</div>
+          <div class="arch-chip-name">Mobile</div>
+          <div class="arch-chip-desc">Responsive</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end arch-diagram -->
+
+  <!-- DATA FLOW + PROTOCOL TABLE -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:1.5rem">
+
+    <div class="about-card">
+      <h3>🔄 Data Flow</h3>
+      <div class="comp-list">
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">1. Sensing (every 15s)</div><div class="comp-desc">ESP32 polls all 5 sensors via I²C, UART and ADC</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">2. Local display</div><div class="comp-desc">Values shown instantly on OLED screen</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">3. Cloud upload</div><div class="comp-desc">HTTP POST to ThingSpeak with all 6 field values</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">4. Web fetch (every 30s)</div><div class="comp-desc">Dashboard pulls last 30 readings from ThingSpeak REST API</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">5. AI analysis</div><div class="comp-desc">User asks chatbot → /api/chat → Groq → answer with live context</div></div></div>
+      </div>
+    </div>
+
+    <div class="about-card">
+      <h3>📡 Communication Protocols</h3>
+      <div class="comp-list">
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">I²C (Inter-Integrated Circuit)</div><div class="comp-desc">AHT20, BMP280, SCD40, OLED — 2 wires, multiple devices</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">UART (Serial)</div><div class="comp-desc">PMS5003 — TX/RX at 9600 baud</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">ADC (Analog-to-Digital)</div><div class="comp-desc">MAX4466 microphone — analog signal on GPIO34</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">HTTP / REST</div><div class="comp-desc">ESP32 → ThingSpeak upload + Dashboard → ThingSpeak fetch</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">HTTPS / JSON</div><div class="comp-desc">Dashboard → /api/chat → Groq AI API</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Wi-Fi IEEE 802.11</div><div class="comp-desc">ESP32 connects to local network for cloud upload</div></div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SECURITY NOTE -->
+  <div class="about-card" style="margin-top:12px;border-left:3px solid var(--accent)">
+    <h3>🔐 Security Architecture</h3>
+    <div class="comp-list" style="margin-top:.5rem">
+      <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">ThingSpeak Read API Key</div><div class="comp-desc">Public channel — read key is acceptable to expose in frontend for this use case</div></div></div>
+      <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Groq API Key — server-side only</div><div class="comp-desc">Stored as Vercel environment variable. Browser never sees it. All AI requests proxied through /api/chat serverless function.</div></div></div>
+      <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">No user data stored</div><div class="comp-desc">Dashboard is stateless — no login, no database, no personal data collected</div></div></div>
+    </div>
+  </div>
+
 </div>
 </div>
 
