@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AirWatch — IoT Air Quality Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f4f0;--surface:#fff;--surface2:#e8ede8;--border:rgba(0,0,0,0.08);
+  --text:#111a11;--muted:#5a6b5a;--accent:#1a7a41;--accent2:#d4a017;
+  --danger:#c0392b;--r:12px;--mono:'Space Mono',monospace;--sans:'Space Grotesk',sans-serif;
+  --shadow:0 1px 8px rgba(0,0,0,0.07);--shadow-lg:0 4px 24px rgba(0,0,0,0.12);
+}
+[data-theme="dark"]{
+  --bg:#0d110d;--surface:#151a15;--surface2:#1d241d;--border:rgba(255,255,255,0.08);
+  --text:#e8ede8;--muted:#7a9a7a;--accent:#52c788;--accent2:#f0c040;
+  --shadow:0 1px 8px rgba(0,0,0,0.4);--shadow-lg:0 4px 24px rgba(0,0,0,0.5);
+}
+html{font-size:16px;scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;transition:background .3s,color .3s}
+
+/* NAV */
+nav{position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:.85rem 2rem;background:var(--surface);border-bottom:1px solid var(--border);backdrop-filter:blur(10px)}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;cursor:pointer}
+.brand-icon{width:32px;height:32px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px}
+.brand-name{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text)}
+.brand-name span{color:var(--accent)}
+.nav-center{display:flex;gap:2px;background:var(--surface2);border-radius:10px;padding:3px}
+.nav-tab{font-family:var(--sans);font-size:13px;font-weight:500;padding:6px 16px;border-radius:8px;border:none;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s}
+.nav-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.nav-right{display:flex;align-items:center;gap:8px}
+.live-pill{display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:999px;padding:5px 12px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+.dot.offline{background:#e74c3c;animation:none}
+.dot.stale{background:#f39c12;animation:none}
+.offline-banner{display:none;background:linear-gradient(135deg,#fdecea,#fadbd8);border:1px solid #e74c3c;border-radius:var(--r);padding:.85rem 1.25rem;margin-bottom:1.5rem;font-size:13px;color:#7a1515;display:flex;align-items:center;gap:10px}
+[data-theme="dark"] .offline-banner{background:linear-gradient(135deg,#2e0a0a,#3d1010);color:#e74c3c;border-color:#7a1515}
+.offline-banner.show{display:flex}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+.btn-icon{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.btn-icon:hover{background:var(--surface)}
+/* mobile nav */
+.mob-menu-btn{display:none;flex-direction:column;gap:4px;cursor:pointer;padding:6px;border-radius:8px;border:1px solid var(--border);background:var(--surface2)}
+.mob-menu-btn span{width:18px;height:2px;background:var(--text);border-radius:2px;display:block}
+.mob-nav{display:none;position:fixed;top:57px;left:0;right:0;background:var(--surface);border-bottom:1px solid var(--border);padding:.75rem 1rem;z-index:199;flex-direction:column;gap:4px}
+.mob-nav.open{display:flex}
+.mob-tab{font-family:var(--sans);font-size:14px;font-weight:500;padding:10px 14px;border-radius:8px;border:none;cursor:pointer;background:transparent;color:var(--muted);text-align:left;transition:all .2s}
+.mob-tab.active{background:var(--surface2);color:var(--text)}
+
+/* PAGES */
+.page{display:none;animation:fadeIn .25s ease}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.container{max-width:1120px;margin:0 auto;padding:2rem}
+
+/* ALERT BANNER */
+#alert-banner{display:none;background:linear-gradient(135deg,#fff8e7,#fff3cd);border:1px solid #f0c040;border-radius:var(--r);padding:1rem 1.25rem;margin-bottom:1.5rem;font-size:13px;color:#7a4d00}
+[data-theme="dark"] #alert-banner{background:linear-gradient(135deg,#2e2200,#3d2e00);color:#f0c040;border-color:#7a6000}
+#alert-banner strong{display:block;margin-bottom:4px;font-size:14px}
+#alert-banner ul{margin-left:1.2rem}
+
+/* AQI HERO */
+.aqi-hero{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.75rem 2rem;margin-bottom:1.5rem;box-shadow:var(--shadow);display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:2rem}
+.aqi-eyebrow{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.aqi-number{font-family:var(--mono);font-size:36px;font-weight:700;line-height:1}
+.aqi-sub{font-size:12px;color:var(--muted);margin-top:4px}
+.aqi-bar-track{display:flex;gap:4px;height:8px;margin-bottom:6px}
+.seg{flex:1;border-radius:4px}
+.seg-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-family:var(--mono)}
+.aqi-pill{padding:8px 20px;border-radius:999px;font-size:13px;font-weight:700;font-family:var(--mono);white-space:nowrap}
+
+/* SENSOR GRID */
+.sensor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-bottom:1.5rem}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;box-shadow:var(--shadow);transition:transform .2s,box-shadow .2s;position:relative;overflow:hidden}
+.scard:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.scard-bar{position:absolute;top:0;left:0;right:0;height:3px}
+.s-temp .scard-bar{background:linear-gradient(90deg,#e74c3c,#ff8a65)}
+.s-hum  .scard-bar{background:linear-gradient(90deg,#2980b9,#74b9ff)}
+.s-pres .scard-bar{background:linear-gradient(90deg,#8e44ad,#c39bd3)}
+.s-co2  .scard-bar{background:linear-gradient(90deg,#27ae60,#82e0aa)}
+.s-pm   .scard-bar{background:linear-gradient(90deg,#d4a017,#f7dc6f)}
+.s-snd  .scard-bar{background:linear-gradient(90deg,#e91e8c,#f48fb1)}
+.scard-icon{font-size:22px;margin-bottom:10px}
+.scard-label{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.scard-value{font-family:var(--mono);font-size:28px;font-weight:700;line-height:1}
+.scard-unit{font-size:13px;font-weight:400;color:var(--muted)}
+.scard-badge{display:inline-block;margin-top:10px;font-size:10px;font-weight:700;letter-spacing:.3px;padding:3px 9px;border-radius:6px;font-family:var(--mono)}
+.bg-good{background:#d5f5e3;color:#0e5a28}
+.bg-ok{background:#fef9e7;color:#7a4d00}
+.bg-warn{background:#fdebd0;color:#7a3300}
+.bg-bad{background:#fdecea;color:#7a1515}
+[data-theme="dark"] .bg-good{background:#0a2e18;color:#52c788}
+[data-theme="dark"] .bg-ok{background:#2a1f00;color:#f0c040}
+[data-theme="dark"] .bg-warn{background:#2e1500;color:#e07800}
+[data-theme="dark"] .bg-bad{background:#2e0a0a;color:#e74c3c}
+
+/* CHARTS */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.5rem}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;box-shadow:var(--shadow)}
+.chart-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:1rem;font-family:var(--mono)}
+.chart-wrap{position:relative;height:155px}
+
+/* HISTORY */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:12px}
+.page-header h2{font-size:20px;font-weight:700;font-family:var(--mono)}
+.page-header-actions{display:flex;gap:8px;align-items:center}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.5rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.25rem;box-shadow:var(--shadow)}
+.stat-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
+.stat-val{font-family:var(--mono);font-size:22px;font-weight:700}
+.stat-unit{font-size:11px;color:var(--muted)}
+.select-input{font-family:var(--sans);font-size:13px;font-weight:500;padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;outline:none}
+.btn-sm{font-family:var(--sans);font-size:13px;font-weight:500;padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;transition:all .2s}
+.btn-sm:hover{background:var(--surface)}
+.big-chart{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.5rem;box-shadow:var(--shadow);margin-bottom:12px}
+.big-chart-wrap{position:relative;height:200px}
+
+/* ALERTS */
+.alert-grid{display:grid;gap:10px;margin-bottom:1.5rem}
+.alert-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem 1.5rem;box-shadow:var(--shadow)}
+.alert-row-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.alert-name{font-size:14px;font-weight:600}
+.alert-desc{font-size:12px;color:var(--muted);margin-top:2px}
+.threshold-row{display:flex;align-items:center;gap:10px}
+.thresh-input{font-family:var(--mono);font-size:14px;font-weight:700;width:76px;padding:6px 10px;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);outline:none}
+.thresh-unit{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.toggle{position:relative;width:44px;height:24px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-track{position:absolute;inset:0;cursor:pointer;background:var(--surface2);border:1px solid var(--border);border-radius:999px;transition:.25s}
+.toggle-track::before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;left:3px;top:3px;background:var(--muted);transition:.25s}
+.toggle input:checked + .toggle-track{background:var(--accent);border-color:var(--accent)}
+.toggle input:checked + .toggle-track::before{transform:translateX(20px);background:#fff}
+.log-box{background:var(--surface2);border-radius:8px;padding:1rem;font-family:var(--mono);font-size:11px;color:var(--muted);max-height:160px;overflow-y:auto;margin-top:.75rem}
+.log-entry{padding:3px 0;border-bottom:1px solid var(--border)}
+.log-entry:last-child{border-bottom:none}
+.log-entry.fired{color:var(--danger)}
+
+/* ABOUT */
+.about-hero{background:linear-gradient(135deg,var(--accent) 0%,#0e5a28 100%);border-radius:16px;padding:3rem 2.5rem;margin-bottom:2rem;color:#fff;position:relative;overflow:hidden}
+.about-hero::before{content:'🌿';position:absolute;right:2rem;top:50%;transform:translateY(-50%);font-size:120px;opacity:.12}
+.about-hero h1{font-family:var(--mono);font-size:32px;font-weight:700;margin-bottom:.5rem}
+.about-hero p{font-size:16px;opacity:.85;max-width:480px;line-height:1.6}
+.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:2rem}
+.about-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.5rem;box-shadow:var(--shadow)}
+.about-card h3{font-size:14px;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:8px}
+.comp-list{display:flex;flex-direction:column;gap:8px}
+.comp-item{display:flex;align-items:flex-start;gap:10px;font-size:13px}
+.comp-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0}
+.comp-name{font-weight:600;margin-bottom:1px}
+.comp-desc{font-size:11px;color:var(--muted)}
+.stack-pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:12px;font-weight:500;font-family:var(--mono);padding:5px 12px;border-radius:999px;background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+.about-footer{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.5rem;box-shadow:var(--shadow);display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.about-avatar{width:48px;height:48px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+
+/* AI CHATBOT */
+.chat-fab{position:fixed;bottom:2rem;right:2rem;z-index:500;width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:22px;box-shadow:0 4px 20px rgba(26,122,65,.4);transition:transform .2s,box-shadow .2s;display:flex;align-items:center;justify-content:center}
+.chat-fab:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(26,122,65,.55)}
+.chat-window{position:fixed;bottom:6rem;right:2rem;z-index:500;width:380px;max-height:560px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;animation:slideUp .25s ease}
+.chat-window.open{display:flex}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.chat-header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;border-radius:16px 16px 0 0}
+.chat-header-left{display:flex;align-items:center;gap:10px}
+.chat-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px}
+.chat-title{font-size:14px;font-weight:600}
+.chat-subtitle{font-size:11px;color:var(--muted)}
+.chat-close{background:none;border:none;cursor:pointer;font-size:18px;color:var(--muted);line-height:1;padding:4px}
+.chat-messages{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:10px;min-height:0}
+.msg{max-width:85%;font-size:13px;line-height:1.5;padding:.6rem .85rem;border-radius:12px}
+.msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-radius:12px 12px 3px 12px}
+.msg.ai{align-self:flex-start;background:var(--surface2);color:var(--text);border-radius:12px 12px 12px 3px;white-space:pre-wrap}
+.msg.ai.loading{opacity:.6}
+.chat-suggestions{padding:.5rem 1rem;display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border)}
+.suggestion{font-size:11px;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;transition:all .15s;font-family:var(--sans)}
+.suggestion:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.chat-input-row{padding:.75rem 1rem;border-top:1px solid var(--border);display:flex;gap:8px}
+.chat-input{flex:1;font-family:var(--sans);font-size:13px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);outline:none;resize:none}
+.chat-input:focus{border-color:var(--accent)}
+.chat-send{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:14px;transition:opacity .2s}
+.chat-send:hover{opacity:.85}
+.chat-send:disabled{opacity:.4;cursor:not-allowed}
+
+/* FOOTER */
+footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-family:var(--mono);border-top:1px solid var(--border)}
+
+/* RESPONSIVE */
+@media(max-width:700px){
+  nav{padding:.75rem 1rem}
+  .nav-center{display:none}
+  .mob-menu-btn{display:flex}
+  .container{padding:1rem}
+  .charts-grid{grid-template-columns:1fr}
+  .aqi-hero{grid-template-columns:1fr;gap:1rem}
+  .stats-row{grid-template-columns:1fr 1fr}
+  .about-grid{grid-template-columns:1fr}
+  .about-hero{padding:2rem 1.25rem}
+  .about-hero h1{font-size:24px}
+  .chat-window{width:calc(100vw - 2rem);right:1rem;bottom:5.5rem}
+  .chat-fab{bottom:1.5rem;right:1rem}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand" onclick="showPage('dashboard',null)">
+    <div class="brand-icon">🌿</div>
+    <span class="brand-name">Air<span>Watch</span></span>
+  </div>
+  <div class="nav-center">
+    <button class="nav-tab active" onclick="showPage('dashboard',this)">Dashboard</button>
+    <button class="nav-tab" onclick="showPage('history',this)">History</button>
+    <button class="nav-tab" onclick="showPage('alerts',this)">Alerts</button>
+    <button class="nav-tab" onclick="showPage('about',this)">About</button>
+  </div>
+  <div class="nav-right">
+    <div class="live-pill">
+      <div class="dot"></div>
+      <span id="last-update">connecting...</span>
+    </div>
+    <button class="btn-icon" onclick="fetchLive()" title="Refresh">↻</button>
+    <button class="btn-icon" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+    <div class="mob-menu-btn" onclick="toggleMobNav()" id="mob-btn">
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+</nav>
+
+<!-- Mobile nav -->
+<div class="mob-nav" id="mob-nav">
+  <button class="mob-tab active" onclick="showPage('dashboard',this);closeMobNav()">Dashboard</button>
+  <button class="mob-tab" onclick="showPage('history',this);closeMobNav()">History</button>
+  <button class="mob-tab" onclick="showPage('alerts',this);closeMobNav()">Alerts</button>
+  <button class="mob-tab" onclick="showPage('about',this);closeMobNav()">About</button>
+</div>
+
+<!-- DASHBOARD -->
+<div class="page active" id="page-dashboard">
+<div class="container">
+  <div id="offline-banner" class="offline-banner">
+    <span style="font-size:20px">📡</span>
+    <div><strong id="offline-title">Device Offline</strong><br><span id="offline-msg">Last reading was some time ago. Showing historical data.</span></div>
+  </div>
+  <div id="alert-banner">
+    <strong>⚠ Active Alerts</strong>
+    <ul id="alert-list"></ul>
+  </div>
+  <div class="aqi-hero">
+    <div>
+      <div class="aqi-eyebrow">Air Quality Index</div>
+      <div class="aqi-number" id="aqi-num">—</div>
+      <div class="aqi-sub" id="aqi-sub">PM2.5 · loading...</div>
+    </div>
+    <div>
+      <div class="aqi-bar-track">
+        <div class="seg" style="background:#27ae60"></div>
+        <div class="seg" style="background:#f1c40f"></div>
+        <div class="seg" style="background:#e67e22"></div>
+        <div class="seg" style="background:#e74c3c"></div>
+        <div class="seg" style="background:#8e44ad"></div>
+      </div>
+      <div class="seg-labels"><span>Good</span><span>Moderate</span><span>Sensitive</span><span>Unhealthy</span><span>Very poor</span></div>
+    </div>
+    <div class="aqi-pill" id="aqi-pill" style="background:var(--surface2);color:var(--muted)">Loading...</div>
+  </div>
+  <div class="sensor-grid">
+    <div class="scard s-temp"><div class="scard-bar"></div><div class="scard-icon">🌡️</div><div class="scard-label">Temperature</div><div class="scard-value" id="v-temp">—<span class="scard-unit"> °C</span></div><div><span class="scard-badge" id="b-temp">—</span></div></div>
+    <div class="scard s-hum"><div class="scard-bar"></div><div class="scard-icon">💧</div><div class="scard-label">Humidity</div><div class="scard-value" id="v-hum">—<span class="scard-unit"> %</span></div><div><span class="scard-badge" id="b-hum">—</span></div></div>
+    <div class="scard s-pres"><div class="scard-bar"></div><div class="scard-icon">🔵</div><div class="scard-label">Pressure</div><div class="scard-value" id="v-pres">—<span class="scard-unit"> hPa</span></div><div><span class="scard-badge" id="b-pres">—</span></div></div>
+    <div class="scard s-co2"><div class="scard-bar"></div><div class="scard-icon">🌿</div><div class="scard-label">CO₂</div><div class="scard-value" id="v-co2">—<span class="scard-unit"> ppm</span></div><div><span class="scard-badge" id="b-co2">—</span></div></div>
+    <div class="scard s-pm"><div class="scard-bar"></div><div class="scard-icon">💨</div><div class="scard-label">PM2.5</div><div class="scard-value" id="v-pm">—<span class="scard-unit"> µg/m³</span></div><div><span class="scard-badge" id="b-pm">—</span></div></div>
+    <div class="scard s-snd"><div class="scard-bar"></div><div class="scard-icon">🔊</div><div class="scard-label">Sound</div><div class="scard-value" id="v-snd">—<span class="scard-unit"> dB</span></div><div><span class="scard-badge" id="b-snd">—</span></div></div>
+  </div>
+  <div class="charts-grid">
+    <div class="chart-card"><div class="chart-title">🌡 Temperature (°C)</div><div class="chart-wrap"><canvas id="c-temp"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">💧 Humidity (%)</div><div class="chart-wrap"><canvas id="c-hum"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">🌿 CO₂ (ppm)</div><div class="chart-wrap"><canvas id="c-co2"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">💨 PM2.5 (µg/m³)</div><div class="chart-wrap"><canvas id="c-pm"></canvas></div></div>
+  </div>
+</div>
+</div>
+
+<!-- HISTORY -->
+<div class="page" id="page-history">
+<div class="container">
+  <div class="page-header">
+    <h2>Historical Data</h2>
+    <div class="page-header-actions">
+      <select class="select-input" id="hist-range" onchange="loadHistory()">
+        <option value="60">Last hour</option>
+        <option value="360">Last 6 hours</option>
+        <option value="1440" selected>Last 24 hours</option>
+        <option value="10080">Last 7 days</option>
+      </select>
+      <button class="btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-label">Avg Temperature</div><div class="stat-val" id="s-temp">—</div><div class="stat-unit">°C</div></div>
+    <div class="stat-card"><div class="stat-label">Avg CO₂</div><div class="stat-val" id="s-co2">—</div><div class="stat-unit">ppm</div></div>
+    <div class="stat-card"><div class="stat-label">Avg PM2.5</div><div class="stat-val" id="s-pm">—</div><div class="stat-unit">µg/m³</div></div>
+  </div>
+  <div class="big-chart"><div class="chart-title">🌡 Temperature & 💧 Humidity</div><div class="big-chart-wrap"><canvas id="h-th"></canvas></div></div>
+  <div class="big-chart"><div class="chart-title">🌿 CO₂ Levels (ppm)</div><div class="big-chart-wrap"><canvas id="h-co2"></canvas></div></div>
+  <div class="big-chart"><div class="chart-title">💨 PM2.5 Particulate Matter (µg/m³)</div><div class="big-chart-wrap"><canvas id="h-pm"></canvas></div></div>
+  <div class="big-chart"><div class="chart-title">🔊 Sound Level (dB)</div><div class="big-chart-wrap"><canvas id="h-snd"></canvas></div></div>
+</div>
+</div>
+
+<!-- ALERTS -->
+<div class="page" id="page-alerts">
+<div class="container">
+  <div class="page-header">
+    <h2>Alert Thresholds</h2>
+    <span style="font-size:13px;color:var(--muted)">Triggers a banner on the dashboard when exceeded</span>
+  </div>
+  <div class="alert-grid" id="alert-cards"></div>
+  <div class="alert-card"><div class="alert-name" style="margin-bottom:.75rem;font-size:14px;font-weight:600">Alert Log</div><div class="log-box" id="alert-log"><div style="color:var(--muted)">No alerts fired yet.</div></div></div>
+</div>
+</div>
+
+<!-- ABOUT -->
+<div class="page" id="page-about">
+<div class="container">
+  <div class="about-hero">
+    <h1>AirWatch</h1>
+    <p>A real-time IoT air quality monitoring system built with ESP32, multiple environmental sensors, and ThingSpeak cloud integration.</p>
+  </div>
+  <div class="about-grid">
+    <div class="about-card">
+      <h3>🔧 Hardware Components</h3>
+      <div class="comp-list">
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">ESP32 CP2102 Type-C</div><div class="comp-desc">Main microcontroller — Wi-Fi, Bluetooth, 32-bit dual-core</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">AHT20 + BMP280</div><div class="comp-desc">Temperature, humidity & atmospheric pressure (I²C)</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">SCD40</div><div class="comp-desc">Photoacoustic CO₂ sensor — 400–2000 ppm (I²C)</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">PMS5003</div><div class="comp-desc">Laser PM2.5 / PM10 particulate sensor (UART)</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">MAX4466</div><div class="comp-desc">Electret microphone amplifier — ambient sound level</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">OLED 0.96″ Display</div><div class="comp-desc">Real-time readings on-device (I²C, SSD1306)</div></div></div>
+      </div>
+    </div>
+    <div class="about-card">
+      <h3>☁️ System Architecture</h3>
+      <div class="comp-list">
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Data Collection</div><div class="comp-desc">ESP32 reads all 6 sensors every 15 seconds</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Local Display</div><div class="comp-desc">OLED shows live readings instantly on-device</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Cloud Upload</div><div class="comp-desc">Data pushed to ThingSpeak via HTTP over Wi-Fi</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Web Dashboard</div><div class="comp-desc">This site — pulls ThingSpeak API, refreshes every 30s</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">AI Assistant</div><div class="comp-desc">Claude AI analyses live data and answers questions</div></div></div>
+      </div>
+    </div>
+    <div class="about-card">
+      <h3>💻 Tech Stack</h3>
+      <div class="stack-pills">
+        <span class="pill">ESP32 Arduino</span><span class="pill">ThingSpeak API</span><span class="pill">Groq AI</span>
+        <span class="pill">Chart.js</span><span class="pill">HTML / CSS / JS</span><span class="pill">I²C Protocol</span>
+        <span class="pill">UART Serial</span><span class="pill">Wi-Fi HTTP</span><span class="pill">Vercel</span>
+      </div>
+    </div>
+    <div class="about-card">
+      <h3>📊 Health Reference Ranges</h3>
+      <div class="comp-list">
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Temperature</div><div class="comp-desc">Comfortable: 16–26°C</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Humidity</div><div class="comp-desc">Comfortable: 30–60%</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">CO₂</div><div class="comp-desc">Good: &lt;600 ppm · Poor: &gt;1000 ppm</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">PM2.5</div><div class="comp-desc">Good: ≤12 µg/m³ · Unhealthy: &gt;55 µg/m³</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Sound</div><div class="comp-desc">Quiet: &lt;40 dB · Loud: &gt;70 dB</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="about-footer">
+    <div class="about-avatar">👨‍💻</div>
+    <div>
+      <div style="font-weight:700;font-size:15px">Gëzim Jusufi</div>
+      <div style="font-size:12px;color:var(--muted)">Computer Science · South East European University (SEEU) · Mentor: Prof. Dr. Mennan Sali</div>
+    </div>
+    <div style="margin-left:auto;font-size:12px;color:var(--muted);font-family:var(--mono)">Channel #3389722</div>
+  </div>
+</div>
+</div>
+
+<footer>AirWatch · ESP32 · AHT20 · BMP280 · SCD40 · PMS5003 · MAX4466 · ThingSpeak #3389722 · Auto-refresh 30s</footer>
+
+<!-- AI CHATBOT -->
+<button class="chat-fab" onclick="toggleChat()" title="Ask AI about your air quality">🤖</button>
+<div class="chat-window" id="chat-window">
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <div class="chat-avatar">🌿</div>
+      <div>
+        <div class="chat-title">AirWatch AI</div>
+        <div class="chat-subtitle">Powered by Groq AI · reads your live data</div>
+      </div>
+    </div>
+    <button class="chat-close" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="chat-messages" id="chat-msgs">
+    <div class="msg ai">👋 Hi! I'm your air quality assistant. I can see your live sensor data and answer questions like:<br><br>• "Is the air quality good right now?"<br>• "Should I open a window?"<br>• "What does PM2.5 mean for my health?"<br>• "When was CO₂ highest today?"</div>
+  </div>
+  <div class="chat-suggestions">
+    <span class="suggestion" onclick="askSuggestion(this)">Is air quality good now?</span>
+    <span class="suggestion" onclick="askSuggestion(this)">Should I open a window?</span>
+    <span class="suggestion" onclick="askSuggestion(this)">Explain PM2.5</span>
+    <span class="suggestion" onclick="askSuggestion(this)">Any health risks?</span>
+  </div>
+  <div class="chat-input-row">
+    <textarea class="chat-input" id="chat-input" placeholder="Ask about your air quality..." rows="1" onkeydown="chatKeydown(event)"></textarea>
+    <button class="chat-send" id="chat-send" onclick="sendChat()">→</button>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────
+const CH='3389722', KEY='MR7NAISO5CSJT7S7';
+const ALERTS_DEF=[
+  {id:'co2',label:'CO₂',unit:'ppm',field:'field4',def:1000,on:true,desc:'High CO₂ = poor ventilation'},
+  {id:'pm',label:'PM2.5',unit:'µg/m³',field:'field5',def:35,on:true,desc:'Fine particle health threshold (WHO)'},
+  {id:'temp',label:'Temperature',unit:'°C',field:'field1',def:35,on:false,desc:'High temperature alert'},
+  {id:'hum',label:'Humidity',unit:'%',field:'field2',def:80,on:false,desc:'High humidity alert'},
+  {id:'snd',label:'Sound',unit:'dB',field:'field6',def:75,on:false,desc:'Noise level alert'},
+];
+let thr={},enabled={},alertLog=[],liveData={},histFeeds=[];
+const charts={},hcharts={};
+ALERTS_DEF.forEach(a=>{
+  thr[a.id]=parseFloat(localStorage.getItem('thr_'+a.id)||a.def);
+  enabled[a.id]=localStorage.getItem('en_'+a.id)!==null?localStorage.getItem('en_'+a.id)==='true':a.on;
+});
+
+// ── Time formatting — FIX ─────────────────────────────────
+function fmtTimestamp(isoStr){
+  const d=new Date(isoStr);
+  const now=new Date();
+  const diffDays=Math.floor((now-d)/(1000*60*60*24));
+  const time=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  if(diffDays===0) return 'Today '+time;
+  if(diffDays===1) return 'Yesterday '+time;
+  const mo=d.toLocaleDateString([],{month:'short',day:'numeric'});
+  return mo+' '+time;
+}
+function fmtChartLabel(d,rangeMinutes){
+  if(rangeMinutes<=360) return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+  return (d.getMonth()+1)+'/'+d.getDate()+' '+d.getHours().toString().padStart(2,'0')+'h';
+}
+
+// ── Theme ─────────────────────────────────────────────────
+function toggleTheme(){
+  const dark=document.documentElement.dataset.theme==='dark';
+  document.documentElement.dataset.theme=dark?'light':'dark';
+  document.getElementById('theme-btn').textContent=dark?'🌙':'☀️';
+  localStorage.setItem('theme',dark?'light':'dark');
+  [...Object.values(charts),...Object.values(hcharts)].forEach(c=>c&&c.update());
+}
+(()=>{const t=localStorage.getItem('theme')||'light';document.documentElement.dataset.theme=t;document.getElementById('theme-btn').textContent=t==='dark'?'☀️':'🌙';})();
+
+// ── Nav ───────────────────────────────────────────────────
+function showPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab,.mob-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(id==='history') loadHistory();
+}
+function toggleMobNav(){document.getElementById('mob-nav').classList.toggle('open')}
+function closeMobNav(){document.getElementById('mob-nav').classList.remove('open')}
+
+// ── Chart factory ─────────────────────────────────────────
+function mkChart(id,label,color,unit,label2,color2){
+  const ctx=document.getElementById(id);if(!ctx)return null;
+  const ds=[{label,data:[],borderColor:color,backgroundColor:color+'18',borderWidth:2,pointRadius:2,fill:true,tension:.4}];
+  if(label2)ds.push({label:label2,data:[],borderColor:color2,backgroundColor:'transparent',borderWidth:1.5,pointRadius:2,fill:false,tension:.4,borderDash:[4,3]});
+  return new Chart(ctx,{type:'line',data:{labels:[],datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:!!label2,labels:{font:{size:11},boxWidth:12,padding:8}}},scales:{x:{ticks:{font:{size:10},maxTicksLimit:6,color:'#888'},grid:{color:'rgba(128,128,128,0.1)'}},y:{ticks:{font:{size:10},color:'#888',callback:v=>v+unit},grid:{color:'rgba(128,128,128,0.1)'}}}}});
+}
+function setChart(c,labels,d1,d2){if(!c)return;c.data.labels=labels;c.data.datasets[0].data=d1;if(d2&&c.data.datasets[1])c.data.datasets[1].data=d2;c.update('none')}
+
+// ── Status ────────────────────────────────────────────────
+const ST={
+  temp:v=>v<16?['Cold','bg-ok']:v<=26?['Comfortable','bg-good']:v<=35?['Warm','bg-ok']:['Hot','bg-bad'],
+  hum:v=>v<30?['Too dry','bg-warn']:v<=60?['Comfortable','bg-good']:v<=80?['Humid','bg-ok']:['Too humid','bg-bad'],
+  pres:v=>v>=990?['Normal','bg-good']:['Low pressure','bg-ok'],
+  co2:v=>v<600?['Fresh','bg-good']:v<1000?['OK','bg-ok']:v<2000?['Poor','bg-warn']:['Very poor','bg-bad'],
+  pm:v=>v<=12?['Good','bg-good']:v<=35?['Moderate','bg-ok']:v<=55?['Sensitive','bg-warn']:['Unhealthy','bg-bad'],
+  snd:v=>v<40?['Quiet','bg-good']:v<70?['Normal','bg-ok']:['Loud','bg-bad'],
+};
+function setCard(id,val,unit,dec=1){
+  const ve=document.getElementById('v-'+id),be=document.getElementById('b-'+id);
+  if(!ve||!be||val===null)return;
+  ve.innerHTML=val.toFixed(dec)+'<span class="scard-unit"> '+unit+'</span>';
+  const[lbl,cls]=ST[id](val);be.textContent=lbl;be.className='scard-badge '+cls;
+}
+function setAQI(pm){
+  if(pm===null)return;
+  const cfg=pm<=12?{t:'Good',bg:'#d5f5e3',c:'#0e5a28'}:pm<=35?{t:'Moderate',bg:'#fef9c3',c:'#7a5c00'}:pm<=55?{t:'Sensitive',bg:'#fdebd0',c:'#7a3300'}:pm<=150?{t:'Unhealthy',bg:'#fdecea',c:'#7a1515'}:{t:'Very poor',bg:'#f4e4f5',c:'#4a1060'};
+  document.getElementById('aqi-num').textContent=pm.toFixed(1)+' µg/m³';
+  document.getElementById('aqi-sub').textContent='PM2.5 · updated now';
+  const p=document.getElementById('aqi-pill');p.textContent=cfg.t;p.style.background=cfg.bg;p.style.color=cfg.c;
+}
+
+// ── Fetch live ────────────────────────────────────────────
+async function fetchLive(){
+  try{
+    const r=await fetch(`https://api.thingspeak.com/channels/${CH}/feeds.json?api_key=${KEY}&results=30`);
+    const j=await r.json();const feeds=j.feeds||[];if(!feeds.length)return;
+    const latest=feeds[feeds.length-1];
+    // FIX: show full date+time
+    document.getElementById('last-update').textContent=fmtTimestamp(latest.created_at);
+    updateDeviceStatus(latest.created_at);
+    const get=f=>{const v=parseFloat(latest[f]);return isNaN(v)?null:v};
+    const[temp,hum,pres,co2,pm,snd]=['field1','field2','field3','field4','field5','field6'].map(get);
+    // store live data for AI
+    liveData={temp,hum,pres,co2,pm,snd,timestamp:latest.created_at,feeds};
+    setCard('temp',temp,'°C');setCard('hum',hum,'%');setCard('pres',pres,'hPa',0);
+    setCard('co2',co2,'ppm',0);setCard('pm',pm,'µg/m³');setCard('snd',snd,'dB');
+    setAQI(pm);
+    const labels=feeds.map(f=>fmtChartLabel(new Date(f.created_at),60));
+    const vals=field=>feeds.map(f=>{const v=parseFloat(f[field]);return isNaN(v)?null:v});
+    setChart(charts.temp,labels,vals('field1'));setChart(charts.hum,labels,vals('field2'));
+    setChart(charts.co2,labels,vals('field4'));setChart(charts.pm,labels,vals('field5'));
+    checkAlerts({temp,hum,co2,pm,snd},new Date(latest.created_at));
+  }catch(e){document.getElementById('last-update').textContent='Connection error'}
+}
+
+// ── Alerts ────────────────────────────────────────────────
+function checkAlerts(vals,ts){
+  const fired=[];
+  ALERTS_DEF.forEach(a=>{
+    if(!enabled[a.id])return;const v=vals[a.id];if(v===null)return;
+    if(v>thr[a.id]){
+      fired.push(`${a.label}: ${v.toFixed(1)} ${a.unit} (limit: ${thr[a.id]})`);
+      const entry={time:fmtTimestamp(ts.toISOString()),msg:`${a.label} ${v.toFixed(1)} ${a.unit} exceeded ${thr[a.id]}`};
+      if(!alertLog.find(x=>x.msg===entry.msg&&x.time===entry.time)){alertLog.unshift(entry);if(alertLog.length>40)alertLog.pop();renderLog();}
+    }
+  });
+  document.getElementById('alert-list').innerHTML=fired.map(t=>`<li>${t}</li>`).join('');
+  document.getElementById('alert-banner').style.display=fired.length?'block':'none';
+}
+function renderLog(){
+  const el=document.getElementById('alert-log');if(!el)return;
+  el.innerHTML=alertLog.length?alertLog.map(e=>`<div class="log-entry fired">${e.time} — ${e.msg}</div>`).join(''):'<div style="color:var(--muted)">No alerts fired yet.</div>';
+}
+function buildAlertCards(){
+  document.getElementById('alert-cards').innerHTML=ALERTS_DEF.map(a=>`
+    <div class="alert-card">
+      <div class="alert-row-inner">
+        <div><div class="alert-name">${a.label} Alert</div><div class="alert-desc">${a.desc}</div></div>
+        <div class="threshold-row">
+          <span style="font-size:12px;color:var(--muted)">Limit</span>
+          <input class="thresh-input" type="number" id="thr-${a.id}" value="${thr[a.id]}" onchange="saveThr('${a.id}',this.value)"/>
+          <span class="thresh-unit">${a.unit}</span>
+          <label class="toggle"><input type="checkbox" id="en-${a.id}" ${enabled[a.id]?'checked':''} onchange="saveEn('${a.id}',this.checked)"/><span class="toggle-track"></span></label>
+        </div>
+      </div>
+    </div>`).join('');
+}
+function saveThr(id,v){thr[id]=parseFloat(v);localStorage.setItem('thr_'+id,v)}
+function saveEn(id,v){enabled[id]=v;localStorage.setItem('en_'+id,v)}
+
+// ── History + CSV ─────────────────────────────────────────
+async function loadHistory(){
+  const min=parseInt(document.getElementById('hist-range').value);
+  try{
+    const r=await fetch(`https://api.thingspeak.com/channels/${CH}/feeds.json?api_key=${KEY}&results=${Math.min(min,8000)}`);
+    const j=await r.json();const feeds=j.feeds||[];if(!feeds.length)return;
+    histFeeds=feeds;
+    const labels=feeds.map(f=>fmtChartLabel(new Date(f.created_at),min));
+    const vals=field=>feeds.map(f=>{const v=parseFloat(f[field]);return isNaN(v)?null:v});
+    const avg=arr=>{const v=arr.filter(x=>x!==null);return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1):null};
+    const t1=vals('field1'),c1=vals('field4'),p1=vals('field5');
+    document.getElementById('s-temp').textContent=avg(t1)||'—';
+    document.getElementById('s-co2').textContent=avg(c1)||'—';
+    document.getElementById('s-pm').textContent=avg(p1)||'—';
+    const mk=(id,l,col,unit,l2,c2)=>{if(hcharts[id])hcharts[id].destroy();hcharts[id]=mkChart(id,l,col,unit,l2,c2)};
+    mk('h-th','Temp (°C)','#e74c3c','°C','Humidity (%)','#2980b9');
+    mk('h-co2','CO₂ (ppm)','#27ae60','ppm');
+    mk('h-pm','PM2.5','#d4a017',' µg/m³');
+    mk('h-snd','Sound (dB)','#e91e8c',' dB');
+    setChart(hcharts['h-th'],labels,vals('field1'),vals('field2'));
+    setChart(hcharts['h-co2'],labels,c1);
+    setChart(hcharts['h-pm'],labels,p1);
+    setChart(hcharts['h-snd'],labels,vals('field6'));
+  }catch(e){console.error(e)}
+}
+function exportCSV(){
+  if(!histFeeds.length){alert('Load history first');return}
+  const rows=[['Timestamp','Temperature(°C)','Humidity(%)','Pressure(hPa)','CO2(ppm)','PM2.5(ug/m3)','Sound(dB)']];
+  histFeeds.forEach(f=>rows.push([f.created_at,f.field1,f.field2,f.field3,f.field4,f.field5,f.field6]));
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='airwatch_data.csv';a.click();
+}
+
+// ── AI CHATBOT ────────────────────────────────────────────
+let chatOpen=false, chatHistory=[];
+function toggleChat(){
+  chatOpen=!chatOpen;
+  document.getElementById('chat-window').classList.toggle('open',chatOpen);
+  if(chatOpen) document.getElementById('chat-input').focus();
+}
+function askSuggestion(el){
+  document.getElementById('chat-input').value=el.textContent;
+  sendChat();
+}
+function chatKeydown(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat()}
+}
+function addMsg(text,role){
+  const el=document.createElement('div');
+  el.className='msg '+role;el.textContent=text;
+  document.getElementById('chat-msgs').appendChild(el);
+  document.getElementById('chat-msgs').scrollTop=99999;
+  return el;
+}
+function getDataAge(isoStr){
+  if(!isoStr) return null;
+  const diffMs=Date.now()-new Date(isoStr).getTime();
+  const mins=Math.floor(diffMs/60000);
+  const hours=Math.floor(mins/60);
+  const days=Math.floor(hours/24);
+  if(days>0) return {label:days+'d '+Math.floor((hours%24))+'h ago',mins,status:days>1?'offline':'stale'};
+  if(hours>0) return {label:hours+'h '+Math.floor((mins%60))+'m ago',mins,status:hours>1?'offline':'stale'};
+  if(mins>5) return {label:mins+' min ago',mins,status:'stale'};
+  return {label:'just now',mins,status:'live'};
+}
+function updateDeviceStatus(isoStr){
+  const age=getDataAge(isoStr);
+  const dot=document.querySelector('.dot');
+  const banner=document.getElementById('offline-banner');
+  const title=document.getElementById('offline-title');
+  const msg=document.getElementById('offline-msg');
+  if(!age||age.status==='live'){
+    dot.className='dot';
+    banner.classList.remove('show');
+  } else if(age.status==='stale'){
+    dot.className='dot stale';
+    banner.classList.add('show');
+    title.textContent='⚠ Data may be outdated';
+    msg.textContent='Last reading was '+age.label+'. The device might have lost Wi-Fi. Displaying last known values.';
+  } else {
+    dot.className='dot offline';
+    banner.classList.add('show');
+    title.textContent='📡 Device Offline';
+    msg.textContent='Last reading was '+age.label+'. The ESP32 is not sending data. Turn it on and connect to Wi-Fi to resume monitoring.';
+  }
+}
+function buildContext(){
+  const d=liveData;
+  if(!d||d.temp===undefined) return 'No sensor data has been loaded yet. The device may not have run recently.';
+  const age=getDataAge(d.timestamp);
+  const ageLabel=age?age.label:'unknown';
+  const statusNote=!age||age.status==='live'
+    ? 'Data status: LIVE — readings are current.'
+    : age.status==='stale'
+      ? 'Data status: STALE — last reading was '+ageLabel+'. Device may have lost Wi-Fi. Do NOT say the air quality is fine right now — say data is '+ageLabel+' old.'
+      : 'Data status: OFFLINE — device has been offline for '+ageLabel+'. These are historical readings, NOT current. Explicitly tell the user the device is offline and you cannot report on current conditions. Suggest they turn on the ESP32.';
+  return `${statusNote}
+
+Last known sensor readings (as of ${ageLabel}):
+- Temperature: ${d.temp!==null?d.temp.toFixed(1)+'°C':'no data'}
+- Humidity: ${d.hum!==null?d.hum.toFixed(1)+'%':'no data'}
+- Pressure: ${d.pres!==null?d.pres.toFixed(0)+' hPa':'no data'}
+- CO₂: ${d.co2!==null?d.co2.toFixed(0)+' ppm':'no data'}
+- PM2.5: ${d.pm!==null?d.pm.toFixed(1)+' µg/m³':'no data'}
+- Sound: ${d.snd!==null?d.snd.toFixed(1)+' dB':'no data'}
+
+Health reference ranges: Temperature comfortable 16–26°C, Humidity comfortable 30–60%, CO₂ good <600ppm acceptable <1000ppm poor >2000ppm, PM2.5 good ≤12 moderate 12–35 sensitive 35–55 unhealthy >55, Sound quiet <40dB normal 40–70dB loud >70dB.
+Hardware: ESP32 + AHT20 + BMP280 + SCD40 + PMS5003 + MAX4466 + OLED → ThingSpeak cloud → this dashboard.`;
+}
+async function sendChat(){
+  const input=document.getElementById('chat-input');
+  const text=input.value.trim();if(!text)return;
+  input.value='';
+  const sendBtn=document.getElementById('chat-send');
+  sendBtn.disabled=true;
+  addMsg(text,'user');
+  chatHistory.push({role:'user',content:text});
+  const loading=addMsg('Analysing your air data...','ai loading');
+  try{
+    const sysPrompt=`You are AirWatch AI, an intelligent assistant embedded in an IoT air quality monitoring dashboard. You have access to sensor data from the user's ESP32-based air quality monitor. IMPORTANT: Always check the data status at the top of the context — if it says OFFLINE or STALE, you must tell the user clearly that you cannot report on current air quality and explain why. Never pretend data is live when it is not. When data IS live, be concise, friendly, and actionable — give specific advice. When values are concerning, suggest concrete actions (open a window, reduce activity, ventilate the room). Keep responses under 150 words unless asked for detail.\n\n${buildContext()}`;
+    const messages=[...chatHistory.slice(-8)];
+    // API key is stored securely on the server — see /api/chat.js
+    const res=await fetch('/api/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages, systemPrompt:sysPrompt})
+    });
+    const data=await res.json();
+    const reply=data.reply||'Sorry, I could not get a response right now.';
+    loading.textContent=reply;loading.classList.remove('loading');
+    chatHistory.push({role:'assistant',content:reply});
+  }catch(e){
+    loading.textContent='Could not connect to AI. Check your internet connection.';
+    loading.classList.remove('loading');
+  }
+  sendBtn.disabled=false;
+  document.getElementById('chat-msgs').scrollTop=99999;
+}
+
+// ── Init ──────────────────────────────────────────────────
+charts.temp=mkChart('c-temp','Temp','#e74c3c','°C');
+charts.hum=mkChart('c-hum','Humidity','#2980b9','%');
+charts.co2=mkChart('c-co2','CO₂','#27ae60','ppm');
+charts.pm=mkChart('c-pm','PM2.5','#d4a017',' µg/m³');
+buildAlertCards();renderLog();
+fetchLive();
+setInterval(fetchLive,30000);
+</script>
+</body>
+</html>
