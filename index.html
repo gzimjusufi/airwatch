@@ -208,6 +208,25 @@ nav{position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-co
 .arch-arrow{font-size:12px;color:var(--muted);font-family:var(--mono);background:var(--surface2);border:1px dashed var(--border);padding:5px 18px;border-radius:999px}
 @media(max-width:640px){.arch-layer-cards{gap:6px}.arch-chip{min-width:80px;padding:.6rem .7rem}.arch-chip-name{font-size:10px}.arch-chip-desc{display:none}}
 
+
+/* AI INSIGHTS */
+.insights-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem 1.5rem;box-shadow:var(--shadow);margin-bottom:1.5rem;position:relative;overflow:hidden}
+.insights-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:var(--accent)}
+.insights-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem}
+.insights-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-family:var(--mono);display:flex;align-items:center;gap:8px}
+.insights-status{padding:4px 12px;border-radius:999px;font-size:11px;font-weight:700;font-family:var(--mono)}
+.insights-body{font-size:14px;line-height:1.7;color:var(--text)}
+.insights-body.loading{color:var(--muted);font-style:italic}
+.insights-footer{margin-top:.75rem;font-size:11px;color:var(--muted);font-family:var(--mono);display:flex;align-items:center;gap:6px}
+.insights-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+.trend-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:.75rem}
+.trend-pill{font-size:11px;padding:3px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:var(--mono)}
+.trend-pill.up{color:#c0392b;border-color:#f5c6c6;background:#fdecea}
+.trend-pill.down{color:#1a7a41;border-color:#c6e8d0;background:#d5f5e3}
+.trend-pill.stable{color:var(--muted)}
+[data-theme="dark"] .trend-pill.up{background:#2e0a0a;border-color:#7a1515}
+[data-theme="dark"] .trend-pill.down{background:#0a2e18;border-color:#0e5a28}
+
 /* FOOTER */
 footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-family:var(--mono);border-top:1px solid var(--border)}
 
@@ -301,6 +320,22 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
     <div class="scard s-pm"><div class="scard-bar"></div><div class="scard-icon">💨</div><div class="scard-label">PM2.5</div><div class="scard-value" id="v-pm">—<span class="scard-unit"> µg/m³</span></div><div><span class="scard-badge" id="b-pm">—</span></div></div>
     <div class="scard s-snd"><div class="scard-bar"></div><div class="scard-icon">🔊</div><div class="scard-label">Sound</div><div class="scard-value" id="v-snd">—<span class="scard-unit"> dB</span></div><div><span class="scard-badge" id="b-snd">—</span></div></div>
   </div>
+  <!-- AI INSIGHTS CARD -->
+  <div class="insights-card" id="insights-card">
+    <div class="insights-header">
+      <div class="insights-title">
+        <span>🤖</span> AI Insights
+      </div>
+      <span class="insights-status" id="insights-status" style="background:var(--surface2);color:var(--muted)">Analysing...</span>
+    </div>
+    <div class="insights-body loading" id="insights-body">Waiting for sensor data...</div>
+    <div class="trend-row" id="trend-row"></div>
+    <div class="insights-footer">
+      <div class="insights-dot"></div>
+      <span id="insights-time">Auto-updates every 30s</span>
+    </div>
+  </div>
+
   <div class="charts-grid">
     <div class="chart-card"><div class="chart-title">🌡 Temperature (°C)</div><div class="chart-wrap"><canvas id="c-temp"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">💧 Humidity (%)</div><div class="chart-wrap"><canvas id="c-hum"></canvas></div></div>
@@ -737,6 +772,7 @@ async function fetchLive(){
     setChart(charts.temp,labels,vals('field1'));setChart(charts.hum,labels,vals('field2'));
     setChart(charts.co2,labels,vals('field4'));setChart(charts.pm,labels,vals('field5'));
     checkAlerts({temp,hum,co2,pm,snd},new Date(latest.created_at));
+    generateInsights();
   }catch(e){document.getElementById('last-update').textContent='Connection error'}
 }
 
@@ -1011,6 +1047,140 @@ async function testEmail() {
   } catch(e) { status.textContent = '❌ Network error'; }
   btn.disabled = false; btn.textContent = 'Send test email';
   setTimeout(() => { status.textContent = ''; }, 6000);
+}
+
+// ── AI Insights ───────────────────────────────────────────
+let insightsLoading = false;
+
+function calcTrend(feeds, field, last=10) {
+  const vals = feeds.slice(-last).map(f => parseFloat(f[field])).filter(v => !isNaN(v));
+  if (vals.length < 3) return null;
+  const first = vals.slice(0, Math.floor(vals.length/2));
+  const recent = vals.slice(Math.floor(vals.length/2));
+  const avgFirst = first.reduce((a,b)=>a+b,0)/first.length;
+  const avgRecent = recent.reduce((a,b)=>a+b,0)/recent.length;
+  const diff = avgRecent - avgFirst;
+  const pct = Math.abs(diff/avgFirst*100);
+  if (pct < 3) return 'stable';
+  return diff > 0 ? 'up' : 'down';
+}
+
+function buildTrendContext(feeds) {
+  if (!feeds || feeds.length < 5) return 'Not enough data for trend analysis.';
+  const fields = [
+    {f:'field1', label:'Temperature', unit:'°C'},
+    {f:'field2', label:'Humidity',    unit:'%'},
+    {f:'field4', label:'CO₂',         unit:'ppm'},
+    {f:'field5', label:'PM2.5',       unit:'µg/m³'},
+    {f:'field6', label:'Sound',       unit:'dB'},
+  ];
+  const lines = fields.map(({f, label, unit}) => {
+    const trend = calcTrend(feeds, f);
+    if (!trend) return null;
+    const recent = feeds.slice(-5).map(x=>parseFloat(x[f])).filter(v=>!isNaN(v));
+    const avg = recent.length ? (recent.reduce((a,b)=>a+b,0)/recent.length).toFixed(1) : '—';
+    const trendLabel = trend==='up'?'rising':trend==='down'?'falling':'stable';
+    return `${label}: avg ${avg}${unit} over last ${feeds.length} readings, trend: ${trendLabel}`;
+  }).filter(Boolean);
+  return lines.join(' | ');
+}
+
+function renderTrendPills(feeds) {
+  if (!feeds || feeds.length < 5) return;
+  const fields = [
+    {f:'field1', label:'Temp',  unit:'°C'},
+    {f:'field4', label:'CO₂',  unit:'ppm'},
+    {f:'field5', label:'PM2.5',unit:'µg/m³'},
+    {f:'field6', label:'Sound',unit:'dB'},
+  ];
+  const row = document.getElementById('trend-row');
+  if (!row) return;
+  row.innerHTML = fields.map(({f,label,unit}) => {
+    const trend = calcTrend(feeds, f);
+    if (!trend) return '';
+    const icon = trend==='up'?'↑':trend==='down'?'↓':'→';
+    return `<span class="trend-pill ${trend}">${icon} ${label}</span>`;
+  }).join('');
+}
+
+async function generateInsights() {
+  if (insightsLoading) return;
+  const d = liveData;
+  if (!d || d.temp === undefined) return;
+
+  insightsLoading = true;
+  const body = document.getElementById('insights-body');
+  const status = document.getElementById('insights-status');
+  const timeEl = document.getElementById('insights-time');
+  if (!body) { insightsLoading=false; return; }
+
+  body.className = 'insights-body loading';
+  body.textContent = 'Analysing sensor trends...';
+  status.textContent = 'Thinking...';
+  status.style.background = 'var(--surface2)';
+  status.style.color = 'var(--muted)';
+
+  const age = getDataAge(d.timestamp);
+  const trendContext = buildTrendContext(d.feeds);
+  renderTrendPills(d.feeds);
+
+  const sysPrompt = `You are an embedded AI analyst in an IoT air quality dashboard. You receive live sensor data AND trend information from the last 30 readings. Your job is to write a 2-3 sentence smart analysis that:
+1. States the current overall air quality situation clearly
+2. Mentions any notable TRENDS (rising, falling, stable) — this is the most valuable insight
+3. Gives one specific actionable recommendation if needed, or confirms no action needed
+
+Rules:
+- Be direct and specific — use actual numbers
+- If a value is trending UP toward a bad threshold, warn proactively even if not exceeded yet
+- If device is offline, say so clearly and do not pretend data is current
+- Keep it under 60 words
+- Do NOT use bullet points — write flowing sentences
+- Do NOT start with "I" or "The AI"
+- End with the overall status: GOOD, MODERATE, POOR, or CRITICAL
+
+Data status: ${age ? age.status.toUpperCase() : 'UNKNOWN'} (${age ? age.label : 'unknown'})
+
+Current readings:
+- Temperature: ${d.temp?.toFixed(1)}°C
+- Humidity: ${d.hum?.toFixed(1)}%
+- CO₂: ${d.co2?.toFixed(0)} ppm
+- PM2.5: ${d.pm?.toFixed(1)} µg/m³
+- Sound: ${d.snd?.toFixed(1)} dB
+
+Trend analysis (last 30 readings):
+${trendContext}`;
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        messages: [{role:'user', content:'Generate air quality insights based on the sensor data and trends provided.'}],
+        systemPrompt: sysPrompt
+      })
+    });
+    const data = await res.json();
+    const reply = data.reply || 'Could not generate insights.';
+
+    body.className = 'insights-body';
+    body.textContent = reply;
+
+    // Set status pill based on content
+    const lower = reply.toLowerCase();
+    const st = lower.includes('critical') ? {t:'Critical',bg:'#fdecea',c:'#7a1515'} :
+               lower.includes('poor')     ? {t:'Poor',    bg:'#fdebd0',c:'#7a3300'} :
+               lower.includes('moderate') ? {t:'Moderate',bg:'#fef9c3',c:'#7a5c00'} :
+                                            {t:'Good',    bg:'#d5f5e3',c:'#0e5a28'};
+    status.textContent = st.t;
+    status.style.background = st.bg;
+    status.style.color = st.c;
+    if (timeEl) timeEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+  } catch(e) {
+    body.className = 'insights-body loading';
+    body.textContent = 'Could not connect to AI analysis.';
+  }
+  insightsLoading = false;
 }
 
 // ── Init ──────────────────────────────────────────────────
