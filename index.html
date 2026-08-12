@@ -732,7 +732,7 @@ function setChart(c,labels,d1,d2){if(!c)return;c.data.labels=labels;c.data.datas
 const ST={
   temp:v=>v<16?['Cold','bg-ok']:v<=26?['Comfortable','bg-good']:v<=35?['Warm','bg-ok']:['Hot','bg-bad'],
   hum:v=>v<30?['Too dry','bg-warn']:v<=60?['Comfortable','bg-good']:v<=80?['Humid','bg-ok']:['Too humid','bg-bad'],
-  pres:v=>v>=990?['Normal','bg-good']:['Low pressure','bg-ok'],
+  pres:v=>v>=960?['Normal (altitude)','bg-good']:v>=940?['Low','bg-ok']:['Very low','bg-warn'],
   co2:v=>v<600?['Fresh','bg-good']:v<1000?['OK','bg-ok']:v<2000?['Poor','bg-warn']:['Very poor','bg-bad'],
   pm:v=>v<=12?['Good','bg-good']:v<=35?['Moderate','bg-ok']:v<=55?['Sensitive','bg-warn']:['Unhealthy','bg-bad'],
   snd:v=>v<40?['Quiet','bg-good']:v<70?['Normal','bg-ok']:['Loud','bg-bad'],
@@ -778,6 +778,12 @@ async function fetchLive(){
 
 // ── Alerts ────────────────────────────────────────────────
 function checkAlerts(vals,ts){
+  // Suppress alerts when device is offline — data is old, don't spam
+  const ageCheck=getDataAge(ts.toISOString());
+  if(ageCheck && ageCheck.status==='offline'){
+    document.getElementById('alert-banner').style.display='none';
+    return;
+  }
   const fired=[];
   const firedAlerts=[];
   ALERTS_DEF.forEach(a=>{
@@ -875,9 +881,13 @@ function getDataAge(isoStr){
   const mins=Math.floor(diffMs/60000);
   const hours=Math.floor(mins/60);
   const days=Math.floor(hours/24);
-  if(days>0) return {label:days+'d '+Math.floor((hours%24))+'h ago',mins,status:days>1?'offline':'stale'};
-  if(hours>0) return {label:hours+'h '+Math.floor((mins%60))+'m ago',mins,status:hours>1?'offline':'stale'};
-  if(mins>5) return {label:mins+' min ago',mins,status:'stale'};
+  // live  : < 2 min  (device just booted, first reading arrives)
+  // stale : 2–30 min (possible Wi-Fi hiccup — warn but don't alarm)
+  // offline: > 30 min (device is definitely off)
+  if(days>0)   return {label:days+'d '+Math.floor((hours%24))+'h ago',mins,status:'offline'};
+  if(hours>0)  return {label:hours+'h '+Math.floor((mins%60))+'m ago',mins,status:'offline'};
+  if(mins>=30) return {label:mins+' min ago',mins,status:'offline'};
+  if(mins>=2)  return {label:mins+' min ago',mins,status:'stale'};
   return {label:'just now',mins,status:'live'};
 }
 function updateDeviceStatus(isoStr){
@@ -1165,15 +1175,22 @@ ${trendContext}`;
     body.className = 'insights-body';
     body.textContent = reply;
 
-    // Set status pill based on content
-    const lower = reply.toLowerCase();
-    const st = lower.includes('critical') ? {t:'Critical',bg:'#fdecea',c:'#7a1515'} :
-               lower.includes('poor')     ? {t:'Poor',    bg:'#fdebd0',c:'#7a3300'} :
-               lower.includes('moderate') ? {t:'Moderate',bg:'#fef9c3',c:'#7a5c00'} :
-                                            {t:'Good',    bg:'#d5f5e3',c:'#0e5a28'};
-    status.textContent = st.t;
-    status.style.background = st.bg;
-    status.style.color = st.c;
+    // Set status pill — grey only when fully offline, otherwise use AI response
+    const age2 = getDataAge(d.timestamp);
+    if(age2 && age2.status==='offline'){
+      status.textContent='Offline';
+      status.style.background='#e8e8e8';
+      status.style.color='#888';
+    } else {
+      const lower = reply.toLowerCase();
+      const st = lower.includes('critical') ? {t:'Critical',bg:'#fdecea',c:'#7a1515'} :
+                 lower.includes('poor')     ? {t:'Poor',    bg:'#fdebd0',c:'#7a3300'} :
+                 lower.includes('moderate') ? {t:'Moderate',bg:'#fef9c3',c:'#7a5c00'} :
+                                              {t:'Good',    bg:'#d5f5e3',c:'#0e5a28'};
+      status.textContent = st.t;
+      status.style.background = st.bg;
+      status.style.color = st.c;
+    }
     if (timeEl) timeEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
 
   } catch(e) {
