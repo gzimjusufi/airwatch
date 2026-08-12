@@ -878,6 +878,7 @@ function addMsg(text,role){
 function getDataAge(isoStr){
   if(!isoStr) return null;
   const diffMs=Date.now()-new Date(isoStr).getTime();
+  console.log('diffMs:', diffMs, 'mins:', Math.floor(diffMs/60000));
   const mins=Math.floor(diffMs/60000);
   const hours=Math.floor(mins/60);
   const days=Math.floor(hours/24);
