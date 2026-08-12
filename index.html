@@ -40,7 +40,7 @@ nav{position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-co
 .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
 .dot.offline{background:#e74c3c;animation:none}
 .dot.stale{background:#f39c12;animation:none}
-.offline-banner{display:none;background:linear-gradient(135deg,#fdecea,#fadbd8);border:1px solid #e74c3c;border-radius:var(--r);padding:.85rem 1.25rem;margin-bottom:1.5rem;font-size:13px;color:#7a1515;display:flex;align-items:center;gap:10px}
+.offline-banner{background:linear-gradient(135deg,#fdecea,#fadbd8);border:1px solid #e74c3c;border-radius:var(--r);padding:.85rem 1.25rem;margin-bottom:1.5rem;font-size:13px;color:#7a1515;align-items:center;gap:10px;display:none}
 [data-theme="dark"] .offline-banner{background:linear-gradient(135deg,#2e0a0a,#3d1010);color:#e74c3c;border-color:#7a1515}
 .offline-banner.show{display:flex}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
