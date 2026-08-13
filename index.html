@@ -602,7 +602,7 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
         <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Local Display</div><div class="comp-desc">OLED shows live readings instantly on-device</div></div></div>
         <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Cloud Upload</div><div class="comp-desc">Data pushed to ThingSpeak via HTTP over Wi-Fi</div></div></div>
         <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Web Dashboard</div><div class="comp-desc">This site — pulls ThingSpeak API, refreshes every 30s</div></div></div>
-        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">AI Assistant</div><div class="comp-desc">Claude AI analyses live data and answers questions</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">AI Assistant</div><div class="comp-desc">Groq AI analyses live data and answers questions</div></div></div>
       </div>
     </div>
     <div class="about-card">
@@ -1209,7 +1209,7 @@ charts.co2=mkChart('c-co2','CO₂','#27ae60','ppm');
 charts.pm=mkChart('c-pm','PM2.5','#d4a017',' µg/m³');
 buildAlertCards();renderLog();initEmailUI();
 fetchLive();
-setInterval(fetchLive,15000);
+setInterval(fetchLive,30000);
 </script>
 </body>
 </html>
