@@ -1011,7 +1011,7 @@ function buildEmailPayload(firedAlerts, currentVals) {
   });
   const readings = Object.keys(SENSOR_META).map(id => {
     const m = SENSOR_META[id]; const v = currentVals[id];
-    if (v === null) return null;
+    if (v === null || v === undefined) return null;
     const [status, cls] = ST[id](v);
     const b = BADGE[cls] || BADGE['bg-ok'];
     return { icon:m.icon, label:m.label, unit:m.unit,
