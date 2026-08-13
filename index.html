@@ -388,12 +388,12 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
         <div class="alert-desc">Receive an email when any enabled threshold is exceeded. Max 1 email per 10 minutes.</div>
       </div>
       <label class="toggle">
-        <input type="checkbox" id="email-enabled" onchange="saveEmailEnabled(this.checked)"/>
-        <span class="toggle-track"></span>
-      </label>
+  <input type="checkbox" id="email-enabled" onchange="saveSettings()"/>
+  <span class="toggle-track"></span>
+</label>
     </div>
     <div id="email-input-row" style="margin-top:12px;display:none;gap:8px;flex-wrap:wrap;align-items:center">
-      <input type="email" id="alert-email" class="thresh-input" style="width:240px;font-family:var(--sans);font-size:13px;text-align:left" placeholder="your@email.com" oninput="saveEmail(this.value)"/>
+      <input type="email" id="alert-email" class="thresh-input" style="width:240px;font-family:var(--sans);font-size:13px;text-align:left" placeholder="your@email.com" oninput="saveSettings()"/>      
       <button class="btn-sm" onclick="testEmail()" id="test-email-btn">Send test email</button>
       <span id="email-status" style="font-size:12px;color:var(--muted)"></span>
     </div>
