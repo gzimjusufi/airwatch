@@ -750,19 +750,18 @@ function setAQI(pm){
   document.getElementById('aqi-sub').textContent='PM2.5 · updated now';
   const p=document.getElementById('aqi-pill');p.textContent=cfg.t;p.style.background=cfg.bg;p.style.color=cfg.c;
 }
-
-// ── Fetch live ────────────────────────────────────────────
 async function fetchLive(){
+  document.getElementById('last-update').textContent = 'Refreshing...';
+  const refreshBtn = document.querySelector('.btn-icon');
+  refreshBtn.style.opacity = '0.4';
   try{
     const r=await fetch(`https://api.thingspeak.com/channels/${CH}/feeds.json?api_key=${KEY}&results=30`);
     const j=await r.json();const feeds=j.feeds||[];if(!feeds.length)return;
     const latest=feeds[feeds.length-1];
-    // FIX: show full date+time
     document.getElementById('last-update').textContent=fmtTimestamp(latest.created_at);
     updateDeviceStatus(latest.created_at);
     const get=f=>{const v=parseFloat(latest[f]);return isNaN(v)?null:v};
     const[temp,hum,pres,co2,pm,snd]=['field1','field2','field3','field4','field5','field6'].map(get);
-    // store live data for AI
     liveData={temp,hum,pres,co2,pm,snd,timestamp:latest.created_at,feeds};
     setCard('temp',temp,'°C');setCard('hum',hum,'%');setCard('pres',pres,'hPa',0);
     setCard('co2',co2,'ppm',0);setCard('pm',pm,'µg/m³');setCard('snd',snd,'dB');
@@ -773,9 +772,11 @@ async function fetchLive(){
     setChart(charts.co2,labels,vals('field4'));setChart(charts.pm,labels,vals('field5'));
     checkAlerts({temp,hum,co2,pm,snd},new Date(latest.created_at));
     generateInsights();
-  }catch(e){document.getElementById('last-update').textContent='Connection error'}
+  }catch(e){
+    document.getElementById('last-update').textContent='Connection error';
+  }
+  refreshBtn.style.opacity='1';
 }
-
 // ── Alerts ────────────────────────────────────────────────
 function checkAlerts(vals,ts){
   // Suppress alerts when device is offline — data is old, don't spam
@@ -1208,7 +1209,7 @@ charts.co2=mkChart('c-co2','CO₂','#27ae60','ppm');
 charts.pm=mkChart('c-pm','PM2.5','#d4a017',' µg/m³');
 buildAlertCards();renderLog();initEmailUI();
 fetchLive();
-setInterval(fetchLive,30000);
+setInterval(fetchLive,15000);
 </script>
 </body>
 </html>
