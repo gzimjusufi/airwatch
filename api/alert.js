@@ -15,7 +15,11 @@ export default async function handler(req, res) {
   if (!alerts?.length || !toEmail) return res.status(400).json({ error: 'Missing alerts or toEmail' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) return res.status(400).json({ error: 'Invalid email' });
 
-  const timestamp = new Date().toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' });
+const timestamp = new Date().toLocaleString('en-GB', { 
+  dateStyle: 'full', 
+  timeStyle: 'short',
+  timeZone: 'Europe/Skopje'
+});
   const alertCount = alerts.length;
 
   const alertRows = alerts.map(a => `
