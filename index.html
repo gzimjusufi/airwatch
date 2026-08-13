@@ -227,6 +227,15 @@ nav{position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-co
 [data-theme="dark"] .trend-pill.up{background:#2e0a0a;border-color:#7a1515}
 [data-theme="dark"] .trend-pill.down{background:#0a2e18;border-color:#0e5a28}
 
+/* OUTDOOR CARD */
+.outdoor-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.75rem 2rem;margin-bottom:1.5rem;box-shadow:var(--shadow);border-top:3px solid #2980b9}
+.outdoor-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
+.outdoor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.out-item{background:var(--surface2);border-radius:10px;padding:.85rem 1rem}
+.out-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
+.out-val{font-family:var(--mono);font-size:20px;font-weight:700}
+.out-cmp{font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--mono)}
+
 /* FOOTER */
 footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-family:var(--mono);border-top:1px solid var(--border)}
 
@@ -290,6 +299,23 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
     <span style="font-size:20px">📡</span>
     <div><strong id="offline-title">Device Offline</strong><br><span id="offline-msg">Last reading was some time ago. Showing historical data.</span></div>
   </div>
+  <!-- OUTDOOR CARD -->
+<div class="outdoor-card" id="outdoor-card">
+  <div class="outdoor-header">
+    <div>
+      <div class="aqi-eyebrow">Outdoor — Tetovo</div>
+      <div id="out-desc" style="font-size:13px;color:var(--muted);margin-top:4px">Loading...</div>
+    </div>
+    <div id="out-aqi" class="aqi-pill" style="background:var(--surface2);color:var(--muted)">—</div>
+  </div>
+  <div class="outdoor-grid">
+    <div class="out-item"><div class="out-label">🌡️ Temperature</div><div class="out-val" id="out-temp">—</div><div class="out-cmp" id="cmp-temp"></div></div>
+    <div class="out-item"><div class="out-label">💧 Humidity</div><div class="out-val" id="out-hum">—</div><div class="out-cmp" id="cmp-hum"></div></div>
+    <div class="out-item"><div class="out-label">🔵 Pressure</div><div class="out-val" id="out-pres">—</div><div class="out-cmp" id="cmp-pres"></div></div>
+    <div class="out-item"><div class="out-label">💨 PM2.5</div><div class="out-val" id="out-pm">—</div><div class="out-cmp" id="cmp-pm"></div></div>
+    <div class="out-item"><div class="out-label">💨 Wind</div><div class="out-val" id="out-wind">—</div></div>
+  </div>
+</div>
   <div id="alert-banner">
     <strong>⚠ Active Alerts</strong>
     <ul id="alert-list"></ul>
@@ -1115,6 +1141,47 @@ function renderTrendPills(feeds) {
   }).join('');
 }
 
+// ── Outdoor weather ───────────────────────────────────────
+async function fetchOutdoor(){
+  try{
+    const r = await fetch('/api/outdoor');
+    const d = await r.json();
+    if(d.error) return;
+
+    // Weather icon mapping
+    const icon = {
+      'Clear':'☀️','Clouds':'☁️','Rain':'🌧️',
+      'Snow':'❄️','Thunderstorm':'⛈️','Drizzle':'🌦️','Mist':'🌫️'
+    }[d.icon] || '🌤️';
+
+    document.getElementById('out-temp').textContent   = d.temp!==null   ? d.temp.toFixed(1)+'°C'    : '—';
+    document.getElementById('out-hum').textContent    = d.humidity!==null? d.humidity+'%'            : '—';
+    document.getElementById('out-pres').textContent   = d.pressure!==null? d.pressure+' hPa'        : '—';
+    document.getElementById('out-pm').textContent     = d.pm25!==null    ? d.pm25.toFixed(1)+' µg/m³': '—';
+    document.getElementById('out-desc').textContent   = icon+' '+d.description;
+    document.getElementById('out-wind').textContent   = d.wind!==null    ? (d.wind*3.6).toFixed(1)+' km/h': '—';
+
+    // AQI label
+    const aqiLabels = ['—','Good','Fair','Moderate','Poor','Very Poor'];
+    document.getElementById('out-aqi').textContent = aqiLabels[d.aqi] || '—';
+
+    // Indoor vs outdoor comparison
+    if(liveData.temp!==undefined){
+      document.getElementById('cmp-temp').textContent = diff(liveData.temp, d.temp, '°C');
+      document.getElementById('cmp-hum').textContent  = diff(liveData.hum,  d.humidity, '%');
+      document.getElementById('cmp-pm').textContent   = diff(liveData.pm,   d.pm25, ' µg/m³');
+      document.getElementById('cmp-pres').textContent = diff(liveData.pres, d.pressure, ' hPa');
+    }
+  }catch(e){ console.error('Outdoor fetch failed:', e); }
+}
+
+function diff(indoor, outdoor, unit){
+  if(indoor===null||outdoor===null) return '—';
+  const d = (indoor - outdoor);
+  const sign = d>0?'+':'';
+  return `${sign}${d.toFixed(1)}${unit} vs outdoor`;
+}
+
 async function generateInsights() {
   if (insightsLoading) return;
   const d = liveData;
@@ -1207,9 +1274,10 @@ charts.temp=mkChart('c-temp','Temp','#e74c3c','°C');
 charts.hum=mkChart('c-hum','Humidity','#2980b9','%');
 charts.co2=mkChart('c-co2','CO₂','#27ae60','ppm');
 charts.pm=mkChart('c-pm','PM2.5','#d4a017',' µg/m³');
-buildAlertCards();renderLog();initEmailUI();
+buildAlertCards();renderLog();initEmailUI();fetchOutdoor();
 fetchLive();
 setInterval(fetchLive,30000);
+setInterval(fetchOutdoor, 60000);
 </script>
 </body>
 </html>
