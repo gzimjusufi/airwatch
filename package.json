@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
-    "@upstash/redis": "^1.38.2",
     "nodemailer": "^6.9.9"
   }
 }
