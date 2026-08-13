@@ -677,10 +677,19 @@ const ALERTS_DEF=[
 ];
 let thr={},enabled={},alertLog=[],liveData={},histFeeds=[];
 const charts={},hcharts={};
-ALERTS_DEF.forEach(a=>{
-  thr[a.id]=parseFloat(localStorage.getItem('thr_'+a.id)||a.def);
-  enabled[a.id]=localStorage.getItem('en_'+a.id)!==null?localStorage.getItem('en_'+a.id)==='true':a.on;
-});
+async function loadSettings(){
+  const r = await fetch('/api/settings');
+  const d = await r.json();
+  ALERTS_DEF.forEach(a=>{
+    thr[a.id] = d.thresholds?.[a.id] ?? a.def;
+    enabled[a.id] = d.enabled?.[a.id] ?? a.on;
+  });
+  document.getElementById('alert-email').value = d.toEmail || '';
+  document.getElementById('email-enabled').checked = !!d.toEmail;
+  document.getElementById('email-input-row').style.display = d.toEmail ? 'flex' : 'none';
+  buildAlertCards();
+}
+
 
 // ── Time formatting — FIX ─────────────────────────────────
 function fmtTimestamp(isoStr){
@@ -798,7 +807,6 @@ function checkAlerts(vals,ts){
   });
   document.getElementById('alert-list').innerHTML=fired.map(t=>`<li>${t}</li>`).join('');
   document.getElementById('alert-banner').style.display=fired.length?'block':'none';
-  if(firedAlerts.length) sendEmailAlert(firedAlerts, vals);
 }
 function renderLog(){
   const el=document.getElementById('alert-log');if(!el)return;
@@ -811,15 +819,14 @@ function buildAlertCards(){
         <div><div class="alert-name">${a.label} Alert</div><div class="alert-desc">${a.desc}</div></div>
         <div class="threshold-row">
           <span style="font-size:12px;color:var(--muted)">Limit</span>
-          <input class="thresh-input" type="number" id="thr-${a.id}" value="${thr[a.id]}" onchange="saveThr('${a.id}',this.value)"/>
+          <input class="thresh-input" type="number" id="thr-${a.id}" value="${thr[a.id]}" onchange="thr['${a.id}'] = parseFloat(this.value); saveSettings()"/>
           <span class="thresh-unit">${a.unit}</span>
-          <label class="toggle"><input type="checkbox" id="en-${a.id}" ${enabled[a.id]?'checked':''} onchange="saveEn('${a.id}',this.checked)"/><span class="toggle-track"></span></label>
+          <label class="toggle"><input type="checkbox" id="en-${a.id}" ${enabled[a.id]?'checked':''} onchange="enabled['${a.id}'] = this.checked; saveSettings()"/><span class="toggle-track"></span></label>
         </div>
       </div>
     </div>`).join('');
 }
-function saveThr(id,v){thr[id]=parseFloat(v);localStorage.setItem('thr_'+id,v)}
-function saveEn(id,v){enabled[id]=v;localStorage.setItem('en_'+id,v)}
+
 
 // ── History + CSV ─────────────────────────────────────────
 async function loadHistory(){
@@ -967,77 +974,24 @@ async function sendChat(){
 }
 
 // ── Email alerts ──────────────────────────────────────────
-let lastEmailSent = 0;
-const EMAIL_COOLDOWN = 10 * 60 * 1000; // 10 minutes
+// ADD THIS UNIFIED FUNCTION INSTEAD:
+async function saveSettings(){
+  const isEmailEnabled = document.getElementById('email-enabled').checked;
+  const emailValue = document.getElementById('alert-email').value;
+  
+  // Instantly toggle the UI row for a snappy user experience
+  document.getElementById('email-input-row').style.display = isEmailEnabled ? 'flex' : 'none';
 
-function saveEmailEnabled(val) {
-  localStorage.setItem('email_enabled', val);
-  document.getElementById('email-input-row').style.display = val ? 'flex' : 'none';
-}
-function saveEmail(val) {
-  localStorage.setItem('alert_email', val);
-}
-function initEmailUI() {
-  const enabled = localStorage.getItem('email_enabled') === 'true';
-  const email = localStorage.getItem('alert_email') || '';
-  document.getElementById('email-enabled').checked = enabled;
-  document.getElementById('alert-email').value = email;
-  document.getElementById('email-input-row').style.display = enabled ? 'flex' : 'none';
-}
-
-function buildEmailPayload(firedAlerts, currentVals) {
-  const SENSOR_META = {
-    temp: { icon:'🌡️', label:'Temperature', unit:'°C' },
-    hum:  { icon:'💧', label:'Humidity',    unit:'%'  },
-    pres: { icon:'🔵', label:'Pressure',    unit:'hPa'},
-    co2:  { icon:'🌿', label:'CO₂',         unit:'ppm'},
-    pm:   { icon:'💨', label:'PM2.5',       unit:'µg/m³'},
-    snd:  { icon:'🔊', label:'Sound',       unit:'dB' },
-  };
-  const BADGE = {
-    'bg-good':{ bg:'#d5f5e3', c:'#0e5a28' },
-    'bg-ok':  { bg:'#fef9e7', c:'#7a4d00' },
-    'bg-warn':{ bg:'#fdebd0', c:'#7a3300' },
-    'bg-bad': { bg:'#fdecea', c:'#7a1515' },
-  };
-  const alerts = firedAlerts.map(a => {
-    const m = SENSOR_META[a.id];
-    const v = currentVals[a.id];
-    const [status, cls] = ST[a.id](v);
-    const b = BADGE[cls] || BADGE['bg-ok'];
-    return { id:a.id, icon:m.icon, label:m.label, unit:m.unit,
-      value: v !== null ? v.toFixed(a.id==='co2'||a.id==='pres'?0:1) : '—',
-      threshold: thr[a.id], status, badgeBg:b.bg, badgeColor:b.c };
+  await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      thresholds: thr, 
+      enabled: enabled, 
+      // If the switch is off, clear the email on the server so alerts stop sending
+      toEmail: isEmailEnabled ? emailValue : '' 
+    })
   });
-  const readings = Object.keys(SENSOR_META).map(id => {
-    const m = SENSOR_META[id]; const v = currentVals[id];
-    if (v === null || v === undefined) return null;
-    const [status, cls] = ST[id](v);
-    const b = BADGE[cls] || BADGE['bg-ok'];
-    return { icon:m.icon, label:m.label, unit:m.unit,
-      value: v.toFixed(id==='co2'||id==='pres'?0:1),
-      status, badgeBg:b.bg, badgeColor:b.c };
-  }).filter(Boolean);
-  return { alerts, readings };
-}
-
-async function sendEmailAlert(firedAlerts, currentVals) {
-  const enabled = localStorage.getItem('email_enabled') === 'true';
-  const toEmail = localStorage.getItem('alert_email') || '';
-  if (!enabled || !toEmail) return;
-  if (Date.now() - lastEmailSent < EMAIL_COOLDOWN) return; // cooldown
-  lastEmailSent = Date.now();
-  const payload = buildEmailPayload(firedAlerts, currentVals);
-  try {
-    const r = await fetch('/api/alert', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, toEmail }),
-    });
-    const d = await r.json();
-    const el = document.getElementById('email-status');
-    if (el) { el.textContent = d.success ? '✅ Email sent!' : '❌ Failed'; setTimeout(()=>{ if(el) el.textContent=''; }, 4000); }
-  } catch(e) { console.error('Email alert failed:', e); }
 }
 
 async function testEmail() {
@@ -1207,7 +1161,7 @@ charts.temp=mkChart('c-temp','Temp','#e74c3c','°C');
 charts.hum=mkChart('c-hum','Humidity','#2980b9','%');
 charts.co2=mkChart('c-co2','CO₂','#27ae60','ppm');
 charts.pm=mkChart('c-pm','PM2.5','#d4a017',' µg/m³');
-buildAlertCards();renderLog();initEmailUI();
+loadSettings();
 fetchLive();
 setInterval(fetchLive,30000);
 </script>
