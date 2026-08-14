@@ -712,8 +712,9 @@ ALERTS_DEF.forEach(a=>{
 function fmtTimestamp(isoStr){
   const d=new Date(isoStr);
   const now=new Date();
-  const diffDays=Math.floor((now-d)/(1000*60*60*24));
   const time=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const dateOnly = x => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  const diffDays = Math.round((dateOnly(now) - dateOnly(d)) / (1000*60*60*24));
   if(diffDays===0) return 'Today '+time;
   if(diffDays===1) return 'Yesterday '+time;
   const mo=d.toLocaleDateString([],{month:'short',day:'numeric'});
