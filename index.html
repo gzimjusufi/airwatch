@@ -236,6 +236,9 @@ nav{position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-co
 .out-val{font-family:var(--mono);font-size:20px;font-weight:700}
 .out-cmp{font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--mono)}
 
+.compare-divider{display:flex;align-items:center;gap:12px;margin:1.5rem 0;color:var(--muted);font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px}
+.compare-divider::before,.compare-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+
 /* FOOTER */
 footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-family:var(--mono);border-top:1px solid var(--border)}
 
@@ -299,23 +302,6 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
     <span style="font-size:20px">📡</span>
     <div><strong id="offline-title">Device Offline</strong><br><span id="offline-msg">Last reading was some time ago. Showing historical data.</span></div>
   </div>
-  <!-- OUTDOOR CARD -->
-<div class="outdoor-card" id="outdoor-card">
-  <div class="outdoor-header">
-    <div>
-      <div class="aqi-eyebrow">Outdoor — Tetovo</div>
-      <div id="out-desc" style="font-size:13px;color:var(--muted);margin-top:4px">Loading...</div>
-    </div>
-    <div id="out-aqi" class="aqi-pill" style="background:var(--surface2);color:var(--muted)">—</div>
-  </div>
-  <div class="outdoor-grid">
-    <div class="out-item"><div class="out-label">🌡️ Temperature</div><div class="out-val" id="out-temp">—</div><div class="out-cmp" id="cmp-temp"></div></div>
-    <div class="out-item"><div class="out-label">💧 Humidity</div><div class="out-val" id="out-hum">—</div><div class="out-cmp" id="cmp-hum"></div></div>
-    <div class="out-item"><div class="out-label">🔵 Pressure</div><div class="out-val" id="out-pres">—</div><div class="out-cmp" id="cmp-pres"></div></div>
-    <div class="out-item"><div class="out-label">💨 PM2.5</div><div class="out-val" id="out-pm">—</div><div class="out-cmp" id="cmp-pm"></div></div>
-    <div class="out-item"><div class="out-label">💨 Wind</div><div class="out-val" id="out-wind">—</div></div>
-  </div>
-</div>
   <div id="alert-banner">
     <strong>⚠ Active Alerts</strong>
     <ul id="alert-list"></ul>
@@ -346,6 +332,27 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
     <div class="scard s-pm"><div class="scard-bar"></div><div class="scard-icon">💨</div><div class="scard-label">PM2.5</div><div class="scard-value" id="v-pm">—<span class="scard-unit"> µg/m³</span></div><div><span class="scard-badge" id="b-pm">—</span></div></div>
     <div class="scard s-snd"><div class="scard-bar"></div><div class="scard-icon">🔊</div><div class="scard-label">Sound</div><div class="scard-value" id="v-snd">—<span class="scard-unit"> dB</span></div><div><span class="scard-badge" id="b-snd">—</span></div></div>
   </div>
+
+  <div class="compare-divider">↕ Compared against outdoor readings</div>
+
+  <!-- OUTDOOR CARD -->
+  <div class="outdoor-card" id="outdoor-card">
+    <div class="outdoor-header">
+      <div>
+        <div class="aqi-eyebrow">Outdoor — Tetovo</div>
+        <div id="out-desc" style="font-size:13px;color:var(--muted);margin-top:4px">Loading...</div>
+      </div>
+      <div id="out-aqi" class="aqi-pill" style="background:var(--surface2);color:var(--muted)">—</div>
+    </div>
+    <div class="outdoor-grid">
+      <div class="out-item"><div class="out-label">🌡️ Temperature</div><div class="out-val" id="out-temp">—</div><div class="out-cmp" id="cmp-temp"></div></div>
+      <div class="out-item"><div class="out-label">💧 Humidity</div><div class="out-val" id="out-hum">—</div><div class="out-cmp" id="cmp-hum"></div></div>
+      <div class="out-item"><div class="out-label">🔵 Pressure</div><div class="out-val" id="out-pres">—</div><div class="out-cmp" id="cmp-pres"></div></div>
+      <div class="out-item"><div class="out-label">💨 PM2.5</div><div class="out-val" id="out-pm">—</div><div class="out-cmp" id="cmp-pm"></div></div>
+      <div class="out-item"><div class="out-label">💨 Wind</div><div class="out-val" id="out-wind">—</div></div>
+    </div>
+  </div>
+
   <!-- AI INSIGHTS CARD -->
   <div class="insights-card" id="insights-card">
     <div class="insights-header">
@@ -368,8 +375,6 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
     <div class="chart-card"><div class="chart-title">🌿 CO₂ (ppm)</div><div class="chart-wrap"><canvas id="c-co2"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">💨 PM2.5 (µg/m³)</div><div class="chart-wrap"><canvas id="c-pm"></canvas></div></div>
   </div>
-</div>
-</div>
 
 <!-- HISTORY -->
 <div class="page" id="page-history">
