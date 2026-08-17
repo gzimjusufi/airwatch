@@ -715,7 +715,18 @@ ALERTS_DEF.forEach(a=>{
   enabled[a.id]=localStorage.getItem('en_'+a.id)!==null?localStorage.getItem('en_'+a.id)==='true':a.on;
 });
 
-// ── Time formatting — FIX ─────────────────────────────────
+// ── Time formatting ────────────────────────────────────────
+// created_at from ThingSpeak is an ISO string with a 'Z' (UTC) suffix.
+// new Date() parses that as an absolute instant, and toLocaleTimeString()/
+// toLocaleDateString()/getHours() below all render it in the *browser's*
+// local timezone automatically — no manual offset needed.
+function tsDate(d){
+  // Format a Date as YYYY-MM-DD%20HH:NN:SS in UTC, for ThingSpeak start/end params.
+  // ThingSpeak's start/end query params are interpreted in UTC, so we must
+  // convert our local "now" back to UTC components here.
+  const p=n=>String(n).padStart(2,'0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}%20${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+}
 function fmtTimestamp(isoStr){
   const d=new Date(isoStr);
   const now=new Date();
@@ -729,6 +740,7 @@ function fmtTimestamp(isoStr){
 }
 function fmtChartLabel(d,rangeMinutes){
   if(rangeMinutes<=360) return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+  if(rangeMinutes<=1440) return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
   return (d.getMonth()+1)+'/'+d.getDate()+' '+d.getHours().toString().padStart(2,'0')+'h';
 }
 
@@ -748,7 +760,9 @@ function showPage(id,btn){
   document.querySelectorAll('.nav-tab,.mob-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   if(btn) btn.classList.add('active');
-  if(id==='history') loadHistory();
+  if(id==='history'){
+    loadHistory();
+  }
 }
 function toggleMobNav(){document.getElementById('mob-nav').classList.toggle('open')}
 function closeMobNav(){document.getElementById('mob-nav').classList.remove('open')}
@@ -868,11 +882,22 @@ function saveThr(id,v){thr[id]=parseFloat(v);localStorage.setItem('thr_'+id,v)}
 function saveEn(id,v){enabled[id]=v;localStorage.setItem('en_'+id,v)}
 
 // ── History + CSV ─────────────────────────────────────────
+// FIX: previously this called the API with `results=<minutes>`, which was
+// wrong — it treated the dropdown's *minutes* value as a *row count*, so
+// "Last 24 hours" (1440) only ever pulled the most recent 1440 readings
+// (~8 hours at a ~20s sample rate) instead of an actual 24-hour window.
+// Now we compute a real start/end UTC window and ask ThingSpeak for exactly
+// that range. For the 7-day view we also ask ThingSpeak to pre-average into
+// 15-minute buckets so the response stays well under its 8000-row cap.
 async function loadHistory(){
   const min=parseInt(document.getElementById('hist-range').value);
   try{
-    const r=await fetch(`https://api.thingspeak.com/channels/${CH}/feeds.json?api_key=${KEY}&results=${Math.min(min,8000)}`);
-    const j=await r.json();const feeds=j.feeds||[];if(!feeds.length)return;
+    const end=new Date();
+    const start=new Date(end.getTime()-min*60000);
+    let url=`https://api.thingspeak.com/channels/${CH}/feeds.json?api_key=${KEY}&start=${tsDate(start)}&end=${tsDate(end)}&results=8000`;
+    if(min>1440){ url+='&average=15'; } // 7-day view: 15-min buckets keeps us under the row cap
+    const r=await fetch(url);
+    const j=await r.json();const feeds=(j.feeds||[]).filter(f=>f.created_at);if(!feeds.length)return;
     histFeeds=feeds;
     const labels=feeds.map(f=>fmtChartLabel(new Date(f.created_at),min));
     const vals=field=>feeds.map(f=>{const v=parseFloat(f[field]);return isNaN(v)?null:v});
@@ -894,8 +919,8 @@ async function loadHistory(){
 }
 function exportCSV(){
   if(!histFeeds.length){alert('Load history first');return}
-  const rows=[['Timestamp','Temperature(°C)','Humidity(%)','Pressure(hPa)','CO2(ppm)','PM2.5(ug/m3)','Sound(dB)']];
-  histFeeds.forEach(f=>rows.push([f.created_at,f.field1,f.field2,f.field3,f.field4,f.field5,f.field6]));
+  const rows=[['Timestamp (UTC)','Timestamp (Local)','Temperature(°C)','Humidity(%)','Pressure(hPa)','CO2(ppm)','PM2.5(ug/m3)','Sound(dB)']];
+  histFeeds.forEach(f=>rows.push([f.created_at,new Date(f.created_at).toLocaleString(),f.field1,f.field2,f.field3,f.field4,f.field5,f.field6]));
   const csv=rows.map(r=>r.join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download='airwatch_data.csv';a.click();
@@ -925,7 +950,6 @@ function addMsg(text,role){
 function getDataAge(isoStr){
   if(!isoStr) return null;
   const diffMs=Date.now()-new Date(isoStr).getTime();
-  console.log('diffMs:', diffMs, 'mins:', Math.floor(diffMs/60000));
   const mins=Math.floor(diffMs/60000);
   const hours=Math.floor(mins/60);
   const days=Math.floor(hours/24);
