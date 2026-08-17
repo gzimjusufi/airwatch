@@ -33,7 +33,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.3-23b-versatile',
+        model: 'GPT OSS 120B / Qwen3.6 27B',
         max_tokens: 400,
         messages: [
           { role: 'system', content: systemPrompt },
