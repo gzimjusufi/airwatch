@@ -207,7 +207,7 @@ Important:
         },
         body: JSON.stringify({
           model: 'meta-llama/llama-prompt-guard-2-86m',
-          max_tokens: 800,
+          max_tokens: 512,
           messages: [
             {
               role: 'system',
