@@ -89,12 +89,8 @@ export default async function handler(req, res) {
 
   // --- CONSTRUCT AMENDED CONTEXT AND DISPATCH TO GROQ ---
   try {
-    // We append explicit operational constraints telling your model that it HAS the history right here.
-    const operationalInstructions = `
-\n\n[SYSTEM INSTRUCTION OVERRIDE]: You have access to real historical data logs for this user environment. Look directly at the data block below marked [HISTORICAL METRICS PROVIDED FOR CONTEXT]. Use these specific logged time data entries to answer any questions regarding past trends, history, changes, or shifts over time. Never apologize or say you don't have access to historical readings.
-
-[HISTORICAL METRICS PROVIDED FOR CONTEXT]:
-${historyContext}`;
+    // Inject operational constraints telling your model that it HAS the history right here.
+    const operationalInstructions = `\n\n[SYSTEM INSTRUCTION OVERRIDE]: You have access to real historical data logs for this user environment. Look directly at the data block below marked [HISTORICAL METRICS PROVIDED FOR CONTEXT]. Use these specific logged time data entries to answer any questions regarding past trends, history, changes, or shifts over time. Never apologize or say you don't have access to historical readings.\n\n[HISTORICAL METRICS PROVIDED FOR CONTEXT]:\n${historyContext}`;
 
     const augmentedSystemPrompt = `${systemPrompt}${operationalInstructions}`;
 
