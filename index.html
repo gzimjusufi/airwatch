@@ -889,35 +889,30 @@ function saveEn(id,v){enabled[id]=v;localStorage.setItem('en_'+id,v)}
 // Now we compute a real start/end UTC window and ask ThingSpeak for exactly
 // that range. For the 7-day view we also ask ThingSpeak to pre-average into
 // 15-minute buckets so the response stays well under its 8000-row cap.
-async function loadHistory(){
+  async function loadHistory(){
   const min=parseInt(document.getElementById('hist-range').value);
   try{
     const end=new Date();
     const start=new Date(end.getTime()-min*60000);
-    // ThingSpeak free tier caps at 8000 rows per call.
-    // At 15s sample rate: 7 days = ~40 320 rows → need 6 pages.
-    // We calculate how many pages are needed for the selected window
-    // and fetch them in parallel, then merge + dedupe.
-    const SAMPLE_SEC=30; // adjust if your sensor rate changes
+    const SAMPLE_SEC=30;
     const PAGE=8000;
     const totalRows=Math.ceil((min*60)/SAMPLE_SEC);
-    const pages=Math.min(6,Math.ceil(totalRows/PAGE)); // cap at 6 pages (48 000 rows)
-    const baseUrl=`https://api.thingspeak.com/channels/${CH}/feeds.json?api_key=${KEY}&start=${tsDate(start)}&end=${tsDate(end)}&results=${PAGE}`;
-    const fetchPage=async(offset)=>{
-      const u=offset?baseUrl+`&offset=${offset}`:baseUrl;
-      const r=await fetch(u);
-      const j=await r.json();
-      return (j.feeds||[]).filter(f=>f.created_at);
-    };
-    const offsets=[...Array(pages)].map((_,i)=>i*PAGE);
-    const pages_data=await Promise.all(offsets.map(fetchPage));
+    const numPages=Math.min(6,Math.ceil(totalRows/PAGE));
+    const sliceMs=(end.getTime()-start.getTime())/numPages;
+    const slices=[...Array(numPages)].map((_,i)=>({
+      s:new Date(start.getTime()+i*sliceMs),
+      e:new Date(start.getTime()+(i+1)*sliceMs)
+    }));
+    const pages_data=await Promise.all(slices.map(sl=>{
+      const u=`https://api.thingspeak.com/channels/${CH}/feeds.json?api_key=${KEY}&start=${tsDate(sl.s)}&end=${tsDate(sl.e)}&results=${PAGE}`;
+      return fetch(u).then(r=>r.json()).then(j=>(j.feeds||[]).filter(f=>f.created_at));
+    }));
     const seen=new Set();
     let feeds=pages_data.flat().filter(f=>{
       if(seen.has(f.created_at))return false;
       seen.add(f.created_at);return true;
     }).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
     if(!feeds.length)return;
-    // Downsample to at most 500 points so charts stay fast
     const maxPts=500;
     if(feeds.length>maxPts){
       const step=Math.ceil(feeds.length/maxPts);
