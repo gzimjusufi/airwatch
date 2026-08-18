@@ -333,7 +333,8 @@ Important:
         },
         body: JSON.stringify({
           model: 'openai/gpt-oss-20b',
-          max_tokens: 1000,
+          max_tokens: 1500,
+          reasoning_effort: 'low',
           messages: [
             {
               role: 'system',
@@ -360,7 +361,7 @@ Important:
 
     const reply =
       data.choices?.[0]?.message?.content ||
-      'No response from AI.';
+      'The AI ran out of room thinking through that one — try asking again, or narrow the time range.';
 
     /*
      * ---------------------------------------------------------
