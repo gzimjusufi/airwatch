@@ -200,23 +200,65 @@ export default async function handler(req, res) {
     const summaryRecentWindow = computeSummary(feedsRecentWindow);
     const summary24h = computeSummary(feeds24h);
 
-    // Downsample both windows to at most ~24 points each before
-    // sending to the AI, to stay well under Groq's token limit.
-    // Full min/max/avg (computed above from ALL raw points) covers
-    // accuracy; these samples just show the trend shape.
+    // Downsample a list to at most maxPoints evenly-spaced entries.
     function downsample(feedList, maxPoints = 24) {
       if (feedList.length === 0) return [];
       const bucketSize = Math.max(1, Math.ceil(feedList.length / maxPoints));
       return feedList.filter((_, i) => i % bucketSize === 0);
     }
 
-    // Smaller sample counts + slimmed-down fields = the real fix
-    // for the Groq 8000 TPM limit (previous payload was ~9200
-    // tokens; each slimmed point is roughly a third the size of a
-    // raw ThingSpeak feed entry).
     const recentWindowSample = downsample(feedsRecentWindow, 16).map(slimFeed);
     const last24hSample = downsample(feeds24h, 12).map(slimFeed);
     const recentFeedsSlim = feeds.map(slimFeed);
+
+    // ---------------------------------------------------------------
+    // SERVER-SIDE WINDOW FILTER
+    // Parse "last N hours" / "past N hours" from the user's message
+    // and slice feedsRecentWindow (or feeds24h for >12h) right here,
+    // so the AI never has to filter by timestamp itself.
+    // ---------------------------------------------------------------
+    let requestedHours = null;
+    const lastUserMsg =
+      [...messages].reverse().find((m) => m.role === 'user')?.content || '';
+    const hoursMatch = lastUserMsg.match(
+      /(?:last|past)\s+(\d+(?:\.\d+)?)\s*h(?:ou?r?s?)?/i
+    );
+    if (hoursMatch) {
+      requestedHours = parseFloat(hoursMatch[1]);
+    }
+
+    let customWindowFeeds = null;
+    let customWindowSample = null;
+    let customWindowSummary = null;
+    let customWindowStart = null;
+    let customWindowEnd = null;
+
+    if (requestedHours !== null) {
+      // Pick the right source list based on requested span
+      const sourceList =
+        requestedHours > 12 ? feeds24h : feedsRecentWindow;
+
+      if (sourceList.length > 0) {
+        // Find the latest UTC timestamp in the list as the anchor
+        const latestTs = Math.max(
+          ...sourceList.map((f) => new Date(f.created_at).getTime())
+        );
+        const cutoffTs = latestTs - requestedHours * 60 * 60 * 1000;
+
+        customWindowFeeds = sourceList.filter(
+          (f) => new Date(f.created_at).getTime() >= cutoffTs
+        );
+        customWindowSummary = computeSummary(customWindowFeeds);
+        customWindowSample = downsample(customWindowFeeds, 16).map(slimFeed);
+
+        if (customWindowFeeds.length > 0) {
+          customWindowStart = toSkopjeTime(customWindowFeeds[0].created_at);
+          customWindowEnd = toSkopjeTime(
+            customWindowFeeds[customWindowFeeds.length - 1].created_at
+          );
+        }
+      }
+    }
 
     const sensorData = {
       channel_name: channel.name,
@@ -224,14 +266,18 @@ export default async function handler(req, res) {
       timezone: 'Europe/Skopje (all timestamps below are local Skopje time, not UTC)',
       // Most recent raw readings (for "current"/"live" questions)
       recent_feeds: recentFeedsSlim,
-      // Sparse samples showing trend shape (NOT full raw data, to
-      // keep token usage low)
+      // Sparse samples + precomputed summaries for standard windows
       recent_window_sample: recentWindowSample,
-      last_24h_hourly_sample: last24hSample,
-      // Precomputed min/max/avg per field, from ALL raw data in
-      // each window (more accurate than the samples above)
       recent_window_summary: summaryRecentWindow,
+      last_24h_hourly_sample: last24hSample,
       last_24h_summary: summary24h,
+      // Pre-filtered window for the specific span the user requested
+      // (null when the user didn't ask for a specific number of hours)
+      requested_window_hours: requestedHours,
+      requested_window_start: customWindowStart,
+      requested_window_end: customWindowEnd,
+      requested_window_sample: customWindowSample,
+      requested_window_summary: customWindowSummary,
     };
 
     /*
@@ -256,24 +302,27 @@ How to use this data:
   without converting or appending "UTC".
 - "recent_feeds" = the last 10 raw readings. Use these for "current",
   "live", or "right now" questions.
-- "recent_window_sample" = a sample of readings (with timestamps)
-  covering roughly the last 12 hours, showing the trend shape.
+- "recent_window_sample" = a sample of readings covering roughly the
+  last 12 hours, showing trend shape.
 - "recent_window_summary" = precomputed min/max/avg per field over
-  the FULL last 12 hours (all raw data, not just the sample).
-- For questions about a specific span within that window (e.g. "last
-  6 hours", "last 8 hours"), filter "recent_window_sample" by its
-  "t" timestamps relative to the most recent timestamp (i.e. only
-  keep entries within that many hours of the latest one), then
-  summarize from the filtered points. Only fall back to
-  "recent_window_summary" (the full 12h figures) if the requested
-  span is close to or larger than 12 hours.
-- "last_24h_hourly_sample" = a sparse sample (roughly one point per
-  hour) from the last 24 hours, showing the general trend shape.
-- "last_24h_summary" = precomputed min/max/avg per field over the
-  FULL last 24 hours. Use these numbers for "how has it been today"
-  or "24h average" style questions.
-- Any of the above may be empty if that window of data isn't
-  available. If empty, say so rather than guessing.
+  the FULL last 12 hours.
+- "last_24h_hourly_sample" = sparse sample from the last 24 hours.
+- "last_24h_summary" = precomputed min/max/avg over the FULL last
+  24 hours. Use for "today" or "24h average" questions.
+- "requested_window_hours", "requested_window_start",
+  "requested_window_end", "requested_window_sample",
+  "requested_window_summary" — when the user asked for a specific
+  number of hours (e.g. "last 8 hours"), these fields are already
+  filtered server-side to exactly that span. Use them directly:
+    • Report requested_window_start – requested_window_end as the
+      actual time range covered.
+    • Use requested_window_summary for min/max/avg numbers.
+    • Use requested_window_sample only for trend shape.
+    • DO NOT re-filter or re-compute the window yourself.
+  If requested_window_summary is null, that window has no data —
+  say so rather than guessing.
+- Any of the above may be empty/null if that window isn't available.
+  If empty, say so rather than guessing.
 
 Classification tiers - use these EXACT tiers and labels, matching
 the dashboard UI exactly. Do not use generic/EPA/WHO bands instead:
@@ -373,12 +422,17 @@ Important:
       reply,
       thingSpeak: {
         channel,
-        feeds, // last 10 raw readings, full/unslimmed (kept for backward compatibility)
+        feeds, // last 10 raw readings, full/unslimmed (kept for backward compat)
         recent_feeds: feeds,
-        recent_window_sample: recentWindowSample, // slimmed, Skopje-local timestamps
+        recent_window_sample: recentWindowSample,
         recent_window_summary: summaryRecentWindow,
-        last_24h_hourly_sample: last24hSample, // slimmed, Skopje-local timestamps
+        last_24h_hourly_sample: last24hSample,
         last_24h_summary: summary24h,
+        requested_window_hours: requestedHours,
+        requested_window_start: customWindowStart,
+        requested_window_end: customWindowEnd,
+        requested_window_sample: customWindowSample,
+        requested_window_summary: customWindowSummary,
       },
     });
   } catch (err) {
