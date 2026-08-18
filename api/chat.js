@@ -33,7 +33,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'qwen/qwen3.6-27b',
+        model: 'openai/gpt-oss-120b',
         max_tokens: 400,
         messages: [
           { role: 'system', content: systemPrompt },
