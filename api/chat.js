@@ -206,8 +206,8 @@ Important:
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'meta-llama/llama-prompt-guard-2-86m',
-          max_tokens: 512,
+          model: 'allam-2-7b',
+          max_tokens: 600,
           messages: [
             {
               role: 'system',
