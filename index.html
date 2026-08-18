@@ -894,10 +894,16 @@ async function loadHistory(){
   try{
     const end=new Date();
     const start=new Date(end.getTime()-min*60000);
-    let url=`https://api.thingspeak.com/channels/${CH}/feeds.json?api_key=${KEY}&start=${tsDate(start)}&end=${tsDate(end)}&results=8000`;
-    if(min>1440){ url+='&average=15'; } // 7-day view: 15-min buckets keeps us under the row cap
-    const r=await fetch(url);
-    const j=await r.json();const feeds=(j.feeds||[]).filter(f=>f.created_at);if(!feeds.length)return;
+    const url=`https://api.thingspeak.com/channels/${CH}/feeds.json?api_key=${KEY}&start=${tsDate(start)}&end=${tsDate(end)}&results=8000`;
+const r=await fetch(url);
+const j=await r.json();
+let feeds=(j.feeds||[]).filter(f=>f.created_at);
+if(!feeds.length)return;
+const maxPts=500;
+if(feeds.length>maxPts){
+  const step=Math.ceil(feeds.length/maxPts);
+  feeds=feeds.filter((_,i)=>i%step===0);
+}
     histFeeds=feeds;
     const labels=feeds.map(f=>fmtChartLabel(new Date(f.created_at),min));
     const vals=field=>feeds.map(f=>{const v=parseFloat(f[field]);return isNaN(v)?null:v});
