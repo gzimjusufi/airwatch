@@ -136,6 +136,17 @@ export default async function handler(req, res) {
       };
     }
 
+    // Downsample the 24h feeds to ~1 point per hour (max 24 points)
+    // before sending to the AI. Sending all 200 raw rows blew past
+    // Groq's per-minute token limit (8000 TPM), so we only keep a
+    // sparse set of points for a rough trend line, plus the full
+    // min/max/avg summary computed above (from ALL the raw data).
+    let last24hHourly = [];
+    if (feeds24h.length > 0) {
+      const bucketSize = Math.max(1, Math.ceil(feeds24h.length / 24));
+      last24hHourly = feeds24h.filter((_, i) => i % bucketSize === 0);
+    }
+
     const sensorData = {
       channel_id: channel.id,
       channel_name: channel.name,
@@ -145,9 +156,11 @@ export default async function handler(req, res) {
       field_names: fieldNameMap,
       // Most recent raw readings (for "current"/"live" questions)
       recent_feeds: feeds,
-      // Last 24 hours of raw readings, if available
-      last_24h_feeds: feeds24h,
-      // Precomputed min/max/avg per field over the last 24h
+      // Sparse ~hourly sample of the last 24h (for a rough trend
+      // shape — NOT the full raw data, to keep token usage low)
+      last_24h_hourly_sample: last24hHourly,
+      // Precomputed min/max/avg per field over the FULL last 24h
+      // (computed from all raw data, not just the sample above)
       last_24h_summary: summary24h,
     };
 
@@ -168,17 +181,20 @@ ${JSON.stringify(sensorData, null, 2)}
 How to use this data:
 - "recent_feeds" = the last 10 raw readings. Use these for "current",
   "live", or "right now" questions.
-- "last_24h_feeds" = raw readings from roughly the last 24 hours (may
-  be empty if unavailable). Use these for trend questions.
+- "last_24h_hourly_sample" = a sparse sample (roughly one point per
+  hour) from the last 24 hours, showing the general trend shape. May
+  be empty if unavailable.
 - "last_24h_summary" = precomputed min/max/avg per sensor field over
-  the last 24 hours. Use these for "how has it been today" or
-  "24h average" style questions.
+  the FULL last 24 hours (computed from all data, not just the
+  sample). Use these numbers for "how has it been today", "24h
+  average", min, or max style questions — they are more accurate
+  than eyeballing the sample.
 
 Important:
 - Do not invent sensor values.
 - If a requested value is not present in the ThingSpeak data, say that it is unavailable.
 - Treat the most recent entry in "recent_feeds" as the latest available reading.
-- If "last_24h_feeds" is empty, say that 24-hour history is not available right now rather than guessing.
+- If "last_24h_summary" is empty, say that 24-hour history is not available right now rather than guessing.
 `;
 
     const response = await fetch(
@@ -232,7 +248,7 @@ Important:
         channel,
         feeds, // last 10 raw readings (kept for backward compatibility)
         recent_feeds: feeds,
-        last_24h_feeds: feeds24h,
+        last_24h_hourly_sample: last24hHourly,
         last_24h_summary: summary24h,
       },
     });
