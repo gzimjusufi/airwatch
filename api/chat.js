@@ -65,11 +65,37 @@ export default async function handler(req, res) {
 
     const recentData = await recentResponse.json();
 
-    // --- 1b. Last 24 hours, OPTIONAL / non-fatal. If this fails
-    // for any reason (bad params, rate limit, timeout), we log it
-    // and just continue without 24h data instead of breaking the
-    // whole chat response. ---
+    // --- 1b. Last 6 hours and last 24 hours, OPTIONAL / non-fatal.
+    // If either fails for any reason (bad params, rate limit,
+    // timeout), we log it and just continue without that window
+    // instead of breaking the whole chat response. ---
+    let feedsRecentWindow = [];
     let feeds24h = [];
+
+    try {
+      const recentWindowUrl =
+        `https://api.thingspeak.com/channels/${channelId}/feeds.json` +
+        `?api_key=${encodeURIComponent(readApiKey)}` +
+        `&results=800` +
+        `&minutes=720`;
+
+      const recentWindowResponse = await fetch(recentWindowUrl);
+
+      if (recentWindowResponse.ok) {
+        const recentWindowData = await recentWindowResponse.json();
+        feedsRecentWindow = Array.isArray(recentWindowData.feeds)
+          ? recentWindowData.feeds
+          : [];
+      } else {
+        const errorText = await recentWindowResponse.text();
+        console.error(
+          'ThingSpeak API error (recentWindow, non-fatal):',
+          errorText
+        );
+      }
+    } catch (e) {
+      console.error('ThingSpeak recent-window fetch failed (non-fatal):', e);
+    }
 
     try {
       const last24hUrl =
@@ -113,39 +139,46 @@ export default async function handler(req, res) {
       if (channel[key]) fieldNameMap[key] = channel[key];
     }
 
-    // Compute min / max / avg for each field over the last 24h,
-    // if we have any 24h data at all.
-    const summary24h = {};
-    for (const fieldKey of Object.keys(fieldNameMap)) {
-      const values = feeds24h
-        .map((f) => parseFloat(f[fieldKey]))
-        .filter((v) => !Number.isNaN(v));
+    // Helper: compute min/max/avg per field for a set of feeds
+    function computeSummary(feedList) {
+      const summary = {};
+      for (const fieldKey of Object.keys(fieldNameMap)) {
+        const values = feedList
+          .map((f) => parseFloat(f[fieldKey]))
+          .filter((v) => !Number.isNaN(v));
 
-      if (values.length === 0) continue;
+        if (values.length === 0) continue;
 
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const avg =
-        values.reduce((sum, v) => sum + v, 0) / values.length;
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const avg =
+          values.reduce((sum, v) => sum + v, 0) / values.length;
 
-      summary24h[fieldNameMap[fieldKey]] = {
-        min: Number(min.toFixed(2)),
-        max: Number(max.toFixed(2)),
-        avg: Number(avg.toFixed(2)),
-        samples: values.length,
-      };
+        summary[fieldNameMap[fieldKey]] = {
+          min: Number(min.toFixed(2)),
+          max: Number(max.toFixed(2)),
+          avg: Number(avg.toFixed(2)),
+          samples: values.length,
+        };
+      }
+      return summary;
     }
 
-    // Downsample the 24h feeds to ~1 point per hour (max 24 points)
-    // before sending to the AI. Sending all 200 raw rows blew past
-    // Groq's per-minute token limit (8000 TPM), so we only keep a
-    // sparse set of points for a rough trend line, plus the full
-    // min/max/avg summary computed above (from ALL the raw data).
-    let last24hHourly = [];
-    if (feeds24h.length > 0) {
-      const bucketSize = Math.max(1, Math.ceil(feeds24h.length / 24));
-      last24hHourly = feeds24h.filter((_, i) => i % bucketSize === 0);
+    const summaryRecentWindow = computeSummary(feedsRecentWindow);
+    const summary24h = computeSummary(feeds24h);
+
+    // Downsample both windows to at most ~24 points each before
+    // sending to the AI, to stay well under Groq's token limit.
+    // Full min/max/avg (computed above from ALL raw points) covers
+    // accuracy; these samples just show the trend shape.
+    function downsample(feedList, maxPoints = 24) {
+      if (feedList.length === 0) return [];
+      const bucketSize = Math.max(1, Math.ceil(feedList.length / maxPoints));
+      return feedList.filter((_, i) => i % bucketSize === 0);
     }
+
+    const recentWindowSample = downsample(feedsRecentWindow, 36);
+    const last24hSample = downsample(feeds24h, 24);
 
     const sensorData = {
       channel_id: channel.id,
@@ -156,11 +189,13 @@ export default async function handler(req, res) {
       field_names: fieldNameMap,
       // Most recent raw readings (for "current"/"live" questions)
       recent_feeds: feeds,
-      // Sparse ~hourly sample of the last 24h (for a rough trend
-      // shape — NOT the full raw data, to keep token usage low)
-      last_24h_hourly_sample: last24hHourly,
-      // Precomputed min/max/avg per field over the FULL last 24h
-      // (computed from all raw data, not just the sample above)
+      // Sparse samples showing trend shape (NOT full raw data, to
+      // keep token usage low)
+      recent_window_sample: recentWindowSample,
+      last_24h_hourly_sample: last24hSample,
+      // Precomputed min/max/avg per field, from ALL raw data in
+      // each window (more accurate than the samples above)
+      recent_window_summary: summaryRecentWindow,
       last_24h_summary: summary24h,
     };
 
@@ -181,30 +216,71 @@ ${JSON.stringify(sensorData, null, 2)}
 How to use this data:
 - "recent_feeds" = the last 10 raw readings. Use these for "current",
   "live", or "right now" questions.
+- "recent_window_sample" = a sample of readings (with timestamps)
+  covering roughly the last 12 hours, showing the trend shape.
+- "recent_window_summary" = precomputed min/max/avg per field over
+  the FULL last 12 hours (all raw data, not just the sample).
+- For questions about a specific span within that window (e.g. "last
+  6 hours", "last 8 hours"), filter "recent_window_sample" by its
+  "created_at" timestamps relative to the most recent timestamp
+  (i.e. only keep entries within that many hours of the latest one),
+  then summarize from the filtered points. Only fall back to
+  "recent_window_summary" (the full 12h figures) if the requested
+  span is close to or larger than 12 hours.
 - "last_24h_hourly_sample" = a sparse sample (roughly one point per
-  hour) from the last 24 hours, showing the general trend shape. May
-  be empty if unavailable.
-- "last_24h_summary" = precomputed min/max/avg per sensor field over
-  the FULL last 24 hours (computed from all data, not just the
-  sample). Use these numbers for "how has it been today", "24h
-  average", min, or max style questions — they are more accurate
-  than eyeballing the sample.
+  hour) from the last 24 hours, showing the general trend shape.
+- "last_24h_summary" = precomputed min/max/avg per field over the
+  FULL last 24 hours. Use these numbers for "how has it been today"
+  or "24h average" style questions.
+- Any of the above may be empty if that window of data isn't
+  available. If empty, say so rather than guessing.
 
-PM2.5 classification (µg/m³) — use these EXACT tiers and labels,
-matching the dashboard UI. Do not use generic/EPA bands instead:
-- 0 – 12: "Good"
-- 13 – 35: "Moderate"
-- 36 – 55: "Sensitive"
-- 56 – 150: "Unhealthy"
+Classification tiers - use these EXACT tiers and labels, matching
+the dashboard UI exactly. Do not use generic/EPA/WHO bands instead:
+
+Temperature (C):
+- < 16: "Cold"
+- 16 - 26: "Comfortable"
+- 26 - 35: "Warm"
+- 35+: "Hot"
+
+Humidity (%):
+- < 30: "Too dry"
+- 30 - 60: "Comfortable"
+- 60 - 80: "Humid"
+- 80+: "Too humid"
+
+Pressure (hPa):
+- 960+: "Normal (altitude)"
+- 940 - 960: "Low"
+- < 940: "Very low"
+
+CO2 (ppm):
+- < 600: "Fresh"
+- 600 - 1000: "OK"
+- 1000 - 2000: "Poor"
+- 2000+: "Very poor"
+
+PM2.5 (ug/m3):
+- 0 - 12: "Good"
+- 13 - 35: "Moderate"
+- 36 - 55: "Sensitive"
+- 56 - 150: "Unhealthy"
 - 151+: "Very poor"
-When reporting a PM2.5 value or average, always state which of these
-five tiers it falls into, using this exact wording.
+
+Sound (dB):
+- < 40: "Quiet"
+- 40 - 70: "Normal"
+- 70+: "Loud"
+
+When reporting any of these values or averages, always state which
+tier it falls into, using this exact wording.
 
 Important:
 - Do not invent sensor values.
 - If a requested value is not present in the ThingSpeak data, say that it is unavailable.
 - Treat the most recent entry in "recent_feeds" as the latest available reading.
-- If "last_24h_summary" is empty, say that 24-hour history is not available right now rather than guessing.
+- If a requested time window's data (recent window or 24h) is empty, say that window isn't available right now rather than guessing.
 `;
 
     const response = await fetch(
@@ -258,7 +334,9 @@ Important:
         channel,
         feeds, // last 10 raw readings (kept for backward compatibility)
         recent_feeds: feeds,
-        last_24h_hourly_sample: last24hHourly,
+        recent_window_sample: recentWindowSample,
+        recent_window_summary: summaryRecentWindow,
+        last_24h_hourly_sample: last24hSample,
         last_24h_summary: summary24h,
       },
     });
