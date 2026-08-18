@@ -66,26 +66,39 @@ export default async function handler(req, res) {
         const samplingInterval = Math.max(1, Math.floor(feeds.length / 24));
         const sampledFeeds = feeds.filter((_, index) => index % samplingInterval === 0);
 
-        historyContext = sampledFeeds.map(f => {
-          const timestamp = new Date(f.created_at).toLocaleString();
-          return `[${timestamp}] Temp: ${f.field1}°C | Humid: ${f.field2}% | CO2: ${f.field3}ppm | PM2.5: ${f.field4}µg/m³ | Sound: ${f.field5}dB`;
-        }).join('\n');
+        if (sampledFeeds.length > 0) {
+          historyContext = sampledFeeds.map(f => {
+            const timestamp = new Date(f.created_at).toLocaleString();
+            return `[${timestamp}] Temp: ${f.field1}°C | Humid: ${f.field2}% | CO2: ${f.field3}ppm | PM2.5: ${f.field4}µg/m³ | Sound: ${f.field5}dB`;
+          }).join('\n');
+        } else {
+          historyContext = "ThingSpeak channel returned an empty array of data points for this timeline.";
+        }
       } else {
         console.error('ThingSpeak API responded with an error status:', tsResponse.status);
+        historyContext = `Error fetching data from ThingSpeak. Status: ${tsResponse.status}`;
       }
     } else {
       console.warn('ThingSpeak Environment Variables missing. Skipping data fetch.');
+      historyContext = "ThingSpeak environment variables are missing on the Vercel dashboard configuration.";
     }
   } catch (tsErr) {
     console.error('Failed to parse historical logs from ThingSpeak:', tsErr);
+    historyContext = `Failed to connect or read from ThingSpeak API: ${tsErr.message}`;
   }
 
   // --- CONSTRUCT AMENDED CONTEXT AND DISPATCH TO GROQ ---
   try {
-    // Append the historical timeframe text block into the system prompt context
-    const augmentedSystemPrompt = `${systemPrompt}\n\n[HISTORICAL METRICS PROVIDED FOR CONTEXT]:\n${historyContext}`;
+    // We append explicit operational constraints telling your model that it HAS the history right here.
+    const operationalInstructions = `
+\n\n[SYSTEM INSTRUCTION OVERRIDE]: You have access to real historical data logs for this user environment. Look directly at the data block below marked [HISTORICAL METRICS PROVIDED FOR CONTEXT]. Use these specific logged time data entries to answer any questions regarding past trends, history, changes, or shifts over time. Never apologize or say you don't have access to historical readings.
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+[HISTORICAL METRICS PROVIDED FOR CONTEXT]:
+${historyContext}`;
+
+    const augmentedSystemPrompt = `${systemPrompt}${operationalInstructions}`;
+
+    const response = await fetch('https://groq.com', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
