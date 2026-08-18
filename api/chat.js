@@ -213,19 +213,35 @@ export default async function handler(req, res) {
 
     // ---------------------------------------------------------------
     // SERVER-SIDE WINDOW FILTER
-    // Parse "last N hours" / "past N hours" from the user's message
-    // and slice feedsRecentWindow (or feeds24h for >12h) right here,
-    // so the AI never has to filter by timestamp itself.
+    // Parse "last/past N hours|days" from the user's message and
+    // slice the right feed list here, so the AI never filters itself.
     // ---------------------------------------------------------------
     let requestedHours = null;
     const lastUserMsg =
       [...messages].reverse().find((m) => m.role === 'user')?.content || '';
+
+    // "last 8 hours", "past 3h", "last 24 hours", etc.
     const hoursMatch = lastUserMsg.match(
       /(?:last|past)\s+(\d+(?:\.\d+)?)\s*h(?:ou?r?s?)?/i
     );
+    // "last 1 day", "last 2 days"
+    const daysMatch = !hoursMatch && lastUserMsg.match(
+      /(?:last|past)\s+(\d+(?:\.\d+)?)\s*d(?:ay?s?)?/i
+    );
+
     if (hoursMatch) {
       requestedHours = parseFloat(hoursMatch[1]);
+    } else if (daysMatch) {
+      requestedHours = parseFloat(daysMatch[1]) * 24;
     }
+
+    // Always derive real start/end for the 24h window from actual data
+    const last24hStart =
+      feeds24h.length > 0 ? toSkopjeTime(feeds24h[0].created_at) : null;
+    const last24hEnd =
+      feeds24h.length > 0
+        ? toSkopjeTime(feeds24h[feeds24h.length - 1].created_at)
+        : null;
 
     let customWindowFeeds = null;
     let customWindowSample = null;
@@ -269,6 +285,8 @@ export default async function handler(req, res) {
       // Sparse samples + precomputed summaries for standard windows
       recent_window_sample: recentWindowSample,
       recent_window_summary: summaryRecentWindow,
+      last_24h_start: last24hStart,
+      last_24h_end: last24hEnd,
       last_24h_hourly_sample: last24hSample,
       last_24h_summary: summary24h,
       // Pre-filtered window for the specific span the user requested
@@ -306,9 +324,13 @@ How to use this data:
   last 12 hours, showing trend shape.
 - "recent_window_summary" = precomputed min/max/avg per field over
   the FULL last 12 hours.
+- "last_24h_start", "last_24h_end" = the actual first and last
+  timestamps in the 24h dataset. ALWAYS use these when reporting
+  the 24h time range — never compute or invent a range yourself.
 - "last_24h_hourly_sample" = sparse sample from the last 24 hours.
 - "last_24h_summary" = precomputed min/max/avg over the FULL last
-  24 hours. Use for "today" or "24h average" questions.
+  24 hours. Use for "today", "last 24 hours", or "24h average"
+  questions. Report the range as last_24h_start – last_24h_end.
 - "requested_window_hours", "requested_window_start",
   "requested_window_end", "requested_window_sample",
   "requested_window_summary" — when the user asked for a specific
@@ -426,6 +448,8 @@ Important:
         recent_feeds: feeds,
         recent_window_sample: recentWindowSample,
         recent_window_summary: summaryRecentWindow,
+        last_24h_start: last24hStart,
+        last_24h_end: last24hEnd,
         last_24h_hourly_sample: last24hSample,
         last_24h_summary: summary24h,
         requested_window_hours: requestedHours,
