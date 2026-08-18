@@ -190,6 +190,16 @@ How to use this data:
   average", min, or max style questions — they are more accurate
   than eyeballing the sample.
 
+PM2.5 classification (µg/m³) — use these EXACT tiers and labels,
+matching the dashboard UI. Do not use generic/EPA bands instead:
+- 0 – 12: "Good"
+- 13 – 35: "Moderate"
+- 36 – 55: "Sensitive"
+- 56 – 150: "Unhealthy"
+- 151+: "Very poor"
+When reporting a PM2.5 value or average, always state which of these
+five tiers it falls into, using this exact wording.
+
 Important:
 - Do not invent sensor values.
 - If a requested value is not present in the ThingSpeak data, say that it is unavailable.
@@ -207,7 +217,7 @@ Important:
         },
         body: JSON.stringify({
           model: 'openai/gpt-oss-120b',
-          max_tokens: 1000,
+          max_tokens: 2000,
           messages: [
             {
               role: 'system',
