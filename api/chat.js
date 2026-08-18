@@ -293,7 +293,7 @@ Important:
         },
         body: JSON.stringify({
           model: 'openai/gpt-oss-120b',
-          max_tokens: 2000,
+          max_tokens: 1000,
           messages: [
             {
               role: 'system',
