@@ -278,6 +278,7 @@ export default async function handler(req, res) {
 
     const sensorData = {
       channel_name: channel.name,
+      location: 'Palatica, Tetovo region, North Macedonia',
       field_names: fieldNameMap,
       timezone: 'Europe/Skopje (all timestamps below are local Skopje time, not UTC)',
       // Most recent raw readings (for "current"/"live" questions)
@@ -315,6 +316,9 @@ THINGSpeak DATA:
 ${JSON.stringify(sensorData)}
 
 How to use this data:
+- The "location" field is the physical location of the sensor.
+  Always use it when referring to location. Never substitute or
+  guess a different city name (e.g. do not say "Skopje").
 - All timestamps in the data (field "t") are already in local
   Europe/Skopje time, NOT UTC. Report times to the user as-is,
   without converting or appending "UTC".
