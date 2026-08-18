@@ -207,7 +207,7 @@ Important:
         },
         body: JSON.stringify({
           model: 'allam-2-7b',
-          max_tokens: 600,
+          max_tokens: 2000,
           messages: [
             {
               role: 'system',
