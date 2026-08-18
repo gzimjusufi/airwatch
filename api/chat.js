@@ -206,8 +206,8 @@ Important:
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'allam-2-7b',
-          max_tokens: 2000,
+          model: 'openai/gpt-oss-120b',
+          max_tokens: 1000,
           messages: [
             {
               role: 'system',
