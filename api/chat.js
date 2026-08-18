@@ -389,7 +389,8 @@ Sound (dB):
 - 70+: "Loud"
 
 When reporting any of these values or averages, always state which
-tier it falls into, using this exact wording.
+tier it falls into, using this exact wording. Always classify the
+AVERAGE value into a tier, never the min or max.
 
 Important:
 - Do not invent sensor values.
