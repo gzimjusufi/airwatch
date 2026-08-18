@@ -139,6 +139,39 @@ export default async function handler(req, res) {
       if (channel[key]) fieldNameMap[key] = channel[key];
     }
 
+    // Convert a ThingSpeak UTC timestamp to a compact Europe/Skopje
+    // local time string, e.g. "2026-08-18 19:47".
+    function toSkopjeTime(isoString) {
+      if (!isoString) return isoString;
+      const d = new Date(isoString);
+      if (Number.isNaN(d.getTime())) return isoString;
+      const parts = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Skopje',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(d);
+      const get = (t) => parts.find((p) => p.type === t)?.value;
+      return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+    }
+
+    // Strip a feed down to just the fields we actually use (local
+    // timestamp + the mapped field columns), and round numeric
+    // values to 1 decimal. This is the main thing keeping the
+    // Groq payload small — raw ThingSpeak feeds include every
+    // field1..field8 (even unused/null ones) plus entry_id.
+    function slimFeed(f) {
+      const slim = { t: toSkopjeTime(f.created_at) };
+      for (const fieldKey of Object.keys(fieldNameMap)) {
+        const v = parseFloat(f[fieldKey]);
+        if (!Number.isNaN(v)) slim[fieldNameMap[fieldKey]] = Number(v.toFixed(1));
+      }
+      return slim;
+    }
+
     // Helper: compute min/max/avg per field for a set of feeds
     function computeSummary(feedList) {
       const summary = {};
@@ -177,18 +210,20 @@ export default async function handler(req, res) {
       return feedList.filter((_, i) => i % bucketSize === 0);
     }
 
-    const recentWindowSample = downsample(feedsRecentWindow, 36);
-    const last24hSample = downsample(feeds24h, 24);
+    // Smaller sample counts + slimmed-down fields = the real fix
+    // for the Groq 8000 TPM limit (previous payload was ~9200
+    // tokens; each slimmed point is roughly a third the size of a
+    // raw ThingSpeak feed entry).
+    const recentWindowSample = downsample(feedsRecentWindow, 16).map(slimFeed);
+    const last24hSample = downsample(feeds24h, 12).map(slimFeed);
+    const recentFeedsSlim = feeds.map(slimFeed);
 
     const sensorData = {
-      channel_id: channel.id,
       channel_name: channel.name,
-      description: channel.description,
-      created_at: channel.created_at,
-      updated_at: channel.updated_at,
       field_names: fieldNameMap,
+      timezone: 'Europe/Skopje (all timestamps below are local Skopje time, not UTC)',
       // Most recent raw readings (for "current"/"live" questions)
-      recent_feeds: feeds,
+      recent_feeds: recentFeedsSlim,
       // Sparse samples showing trend shape (NOT full raw data, to
       // keep token usage low)
       recent_window_sample: recentWindowSample,
@@ -210,10 +245,15 @@ export default async function handler(req, res) {
 You have access to live and, when available, historical sensor/device
 data from ThingSpeak.
 
+Current time (Europe/Skopje, local): ${toSkopjeTime(new Date().toISOString())}
+
 THINGSpeak DATA:
-${JSON.stringify(sensorData, null, 2)}
+${JSON.stringify(sensorData)}
 
 How to use this data:
+- All timestamps in the data (field "t") are already in local
+  Europe/Skopje time, NOT UTC. Report times to the user as-is,
+  without converting or appending "UTC".
 - "recent_feeds" = the last 10 raw readings. Use these for "current",
   "live", or "right now" questions.
 - "recent_window_sample" = a sample of readings (with timestamps)
@@ -222,9 +262,9 @@ How to use this data:
   the FULL last 12 hours (all raw data, not just the sample).
 - For questions about a specific span within that window (e.g. "last
   6 hours", "last 8 hours"), filter "recent_window_sample" by its
-  "created_at" timestamps relative to the most recent timestamp
-  (i.e. only keep entries within that many hours of the latest one),
-  then summarize from the filtered points. Only fall back to
+  "t" timestamps relative to the most recent timestamp (i.e. only
+  keep entries within that many hours of the latest one), then
+  summarize from the filtered points. Only fall back to
   "recent_window_summary" (the full 12h figures) if the requested
   span is close to or larger than 12 hours.
 - "last_24h_hourly_sample" = a sparse sample (roughly one point per
@@ -332,11 +372,11 @@ Important:
       reply,
       thingSpeak: {
         channel,
-        feeds, // last 10 raw readings (kept for backward compatibility)
+        feeds, // last 10 raw readings, full/unslimmed (kept for backward compatibility)
         recent_feeds: feeds,
-        recent_window_sample: recentWindowSample,
+        recent_window_sample: recentWindowSample, // slimmed, Skopje-local timestamps
         recent_window_summary: summaryRecentWindow,
-        last_24h_hourly_sample: last24hSample,
+        last_24h_hourly_sample: last24hSample, // slimmed, Skopje-local timestamps
         last_24h_summary: summary24h,
       },
     });
