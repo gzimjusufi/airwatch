@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
   // 2. Lock down the 27B model profile for the Insight feature
   if (isInsight) {
-    selectedModel = 'qwen-3.6-27b'; // Explicit Groq Model ID for Qwen 27B
+    selectedModel = 'qwen/qwen-3.6-27b'; // Explicit Groq Model ID for Qwen 27B
     dynamicMaxTokens = 1000;
     
     // Near-zero temperature locks down the model to strictly follow data constraints
