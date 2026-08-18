@@ -30,9 +30,6 @@ export default async function handler(req, res) {
     /*
      * ---------------------------------------------------------
      * 1. GET DATA FROM THINGSPEAK
-     *    - "recent": last 10 raw readings (for live/current values)
-     *    - "last24h": full 24h window, downsampled to hourly
-     *      averages so the payload stays small
      * ---------------------------------------------------------
      */
 
@@ -47,47 +44,24 @@ export default async function handler(req, res) {
       });
     }
 
-    const recentUrl =
+    const thingSpeakUrl =
       `https://api.thingspeak.com/channels/${channelId}/feeds.json` +
       `?api_key=${encodeURIComponent(readApiKey)}` +
       `&results=10`;
 
-    // Last 24 hours, averaged into 60-minute buckets so we get at
-    // most ~24 data points instead of potentially thousands of
-    // raw readings.
-    const last24hUrl =
-      `https://api.thingspeak.com/channels/${channelId}/feeds.json` +
-      `?api_key=${encodeURIComponent(readApiKey)}` +
-      `&days=1` +
-      `&average=60`;
+    const thingSpeakResponse = await fetch(thingSpeakUrl);
 
-    const [recentResponse, last24hResponse] = await Promise.all([
-      fetch(recentUrl),
-      fetch(last24hUrl),
-    ]);
+    if (!thingSpeakResponse.ok) {
+      const errorText = await thingSpeakResponse.text();
 
-    if (!recentResponse.ok) {
-      const errorText = await recentResponse.text();
-
-      console.error('ThingSpeak API error (recent):', errorText);
+      console.error('ThingSpeak API error:', errorText);
 
       return res.status(502).json({
         error: 'ThingSpeak service error',
       });
     }
 
-    if (!last24hResponse.ok) {
-      const errorText = await last24hResponse.text();
-
-      console.error('ThingSpeak API error (last24h):', errorText);
-
-      return res.status(502).json({
-        error: 'ThingSpeak service error',
-      });
-    }
-
-    const recentData = await recentResponse.json();
-    const last24hData = await last24hResponse.json();
+    const thingSpeakData = await thingSpeakResponse.json();
 
     /*
      * ---------------------------------------------------------
@@ -95,40 +69,8 @@ export default async function handler(req, res) {
      * ---------------------------------------------------------
      */
 
-    const channel = recentData.channel || {};
-    const feeds = recentData.feeds || [];
-    const feeds24h = last24hData.feeds || [];
-
-    // Map field1..field8 -> their human-readable names from the
-    // channel metadata (e.g. field1 -> "Temperature").
-    const fieldNameMap = {};
-    for (let i = 1; i <= 8; i++) {
-      const key = `field${i}`;
-      if (channel[key]) fieldNameMap[key] = channel[key];
-    }
-
-    // Compute min / max / avg for each field over the last 24h so
-    // the AI gets real trend info without needing every raw point.
-    const summary24h = {};
-    for (const fieldKey of Object.keys(fieldNameMap)) {
-      const values = feeds24h
-        .map((f) => parseFloat(f[fieldKey]))
-        .filter((v) => !Number.isNaN(v));
-
-      if (values.length === 0) continue;
-
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const avg =
-        values.reduce((sum, v) => sum + v, 0) / values.length;
-
-      summary24h[fieldNameMap[fieldKey]] = {
-        min: Number(min.toFixed(2)),
-        max: Number(max.toFixed(2)),
-        avg: Number(avg.toFixed(2)),
-        samples: values.length,
-      };
-    }
+    const channel = thingSpeakData.channel || {};
+    const feeds = thingSpeakData.feeds || [];
 
     const sensorData = {
       channel_id: channel.id,
@@ -136,14 +78,7 @@ export default async function handler(req, res) {
       description: channel.description,
       created_at: channel.created_at,
       updated_at: channel.updated_at,
-      field_names: fieldNameMap,
-      // Most recent raw readings (for "current"/"live" questions)
-      recent_feeds: feeds,
-      // Last 24 hours, hourly-averaged (for "last 24 hours" /
-      // "today" / trend questions)
-      last_24h_hourly: feeds24h,
-      // Precomputed min/max/avg per field over the last 24h
-      last_24h_summary: summary24h,
+      feeds,
     };
 
     /*
@@ -154,27 +89,18 @@ export default async function handler(req, res) {
 
     const aiSystemPrompt = `${systemPrompt}
 
-You have access to live and historical sensor/device data from ThingSpeak.
+You have access to live sensor/device data from ThingSpeak.
+
+Use the following ThingSpeak data when answering questions about
+the sensors, devices, measurements, or current readings.
 
 THINGSpeak DATA:
 ${JSON.stringify(sensorData, null, 2)}
 
-How to use this data:
-- "recent_feeds" = the last 10 raw readings. Use these for "current",
-  "live", or "right now" questions.
-- "last_24h_hourly" = readings from the last 24 hours, averaged into
-  hourly buckets. Use these when the user asks about trends over the
-  last 24 hours / today.
-- "last_24h_summary" = precomputed min/max/avg per sensor field over
-  the last 24 hours. Use these when the user asks for a 24h average,
-  min, max, or a general "how has the air quality been today" style
-  summary.
-
 Important:
 - Do not invent sensor values.
 - If a requested value is not present in the ThingSpeak data, say that it is unavailable.
-- Treat the most recent entry in "recent_feeds" as the latest available reading.
-- If "last_24h_hourly" or "last_24h_summary" is empty, say that 24-hour history is not available rather than guessing.
+- Treat the most recent feed as the latest available reading.
 `;
 
     const response = await fetch(
@@ -226,10 +152,7 @@ Important:
       reply,
       thingSpeak: {
         channel,
-        feeds,          // last 10 raw readings (kept for backward compatibility)
-        recent_feeds: feeds,
-        last_24h_hourly: feeds24h,
-        last_24h_summary: summary24h,
+        feeds,
       },
     });
   } catch (err) {
