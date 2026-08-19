@@ -168,7 +168,7 @@ None of the third-party credentials are ever exposed to the browser. The Groq AP
 
 **Gëzim Jusufi**  
 Computer Science — South East European University (SEEU)  
-Mentor: Prof. Dr. Mennan Sali  
+Mentor: Prof. Dr. Mennan Selimi  
 Capstone Project — 2025
 
 ---
