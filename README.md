@@ -42,7 +42,7 @@ ThingSpeak Channel → **[#3389722](https://thingspeak.com/channels/3389722)**
               ┌───────────────────────┐
               │   ThingSpeak Cloud    │
               │   Channel #3389722    │
-              │   6 fields / 30s      │
+              │   6 fields / 20-30s   │
               └───────────┬───────────┘
                           │ REST API
                           ▼
@@ -54,6 +54,7 @@ ThingSpeak Channel → **[#3389722](https://thingspeak.com/channels/3389722)**
               │  • Historical Charts  │
               │  • Alert Thresholds   │
               │  • AI Chatbot (Groq)  │
+              │  • Outdoor Comparison │
               └───────────────────────┘
 ```
 
@@ -77,13 +78,15 @@ ThingSpeak Channel → **[#3389722](https://thingspeak.com/channels/3389722)**
 - ✅ **Live sensor cards** with color-coded status badges
 - ✅ **AQI indicator** (Air Quality Index) based on PM2.5
 - ✅ **Real-time charts** — auto-refresh every 30 seconds
-- ✅ **Historical data** — last 1h / 6h / 24h / 7 days
+- ✅ **Historical data** — last 1h / 6h / 24h / 7 days, with server-side windowed queries (not just client-side filtering)
 - ✅ **CSV export** of historical readings
-- ✅ **Configurable alerts** with threshold toggles
-- ✅ **AI chatbot** powered by Groq (llama-3.3-70b) — analyses live data
-- ✅ **Offline detection** — detects when ESP32 is not sending data
+- ✅ **Configurable alerts** with per-parameter threshold toggles and a running alert log
+- ✅ **Email notifications** — sent via a secure serverless function (Nodemailer + Gmail SMTP) when a threshold is exceeded
+- ✅ **Outdoor comparison** — live outdoor weather + air pollution data (OpenWeatherMap) shown side-by-side with indoor readings, including deltas
+- ✅ **AI chatbot** (AirWatch AI) powered by Groq (`openai/gpt-oss-20b`) — reads live and historical sensor context to answer natural-language questions
+- ✅ **Offline detection** — detects when the ESP32 has stopped sending data
 - ✅ **Dark mode** + mobile responsive
-- ✅ **Secure API proxy** — Groq key stored server-side via Vercel
+- ✅ **Secure API proxies** — Groq, Gmail, and OpenWeatherMap credentials all stay server-side via Vercel environment variables
 
 ---
 
@@ -92,6 +95,8 @@ ThingSpeak Channel → **[#3389722](https://thingspeak.com/channels/3389722)**
 ### Prerequisites
 - [Vercel account](https://vercel.com) (free)
 - [Groq API key](https://console.groq.com) (free)
+- [OpenWeatherMap API key](https://openweathermap.org/api) (free)
+- A Gmail account with an [app password](https://myaccount.google.com/apppasswords) (for email alerts)
 - [GitHub account](https://github.com)
 
 ### Steps
@@ -105,9 +110,14 @@ cd airwatch
 **2. Deploy to Vercel**
 - Go to [vercel.com](https://vercel.com) → New Project
 - Import your GitHub repository
-- Add environment variable:
+- Add environment variables:
   ```
-  GROQ_API_KEY = your_key_here
+  GROQ_API_KEY           = your_groq_key_here
+  THINGSPEAK_CHANNEL_ID  = your_channel_id_here
+  THINGSPEAK_READ_API_KEY = your_thingspeak_read_key_here
+  OWM_API_KEY             = your_openweathermap_key_here
+  GMAIL_USER              = your_gmail_address_here
+  GMAIL_PASS               = your_gmail_app_password_here
   ```
 - Click Deploy
 
@@ -119,10 +129,13 @@ cd airwatch
 
 ```
 airwatch/
-├── index.html          # Main web dashboard (HTML/CSS/JS)
+├── index.html          # Main web dashboard (HTML/CSS/JS, single page, five views)
 ├── api/
-│   └── chat.js         # Vercel serverless function (Groq proxy)
-├── vercel.json         # Vercel routing config
+│   ├── chat.js          # Serverless proxy to the Groq chat completion API
+│   ├── alert.js          # Serverless function that formats and sends alert emails
+│   └── outdoor.js        # Serverless proxy to the OpenWeatherMap API
+├── vercel.json           # Vercel routing and header configuration
+├── package.json          # Node dependencies (nodemailer)
 ├── .gitignore
 └── README.md
 ```
@@ -131,7 +144,7 @@ airwatch/
 
 ## 🔐 Security
 
-The Groq API key is **never exposed to the browser**. All AI requests go through `/api/chat` — a Vercel serverless function that injects the key server-side from environment variables.
+None of the third-party credentials are ever exposed to the browser. The Groq API key, the ThingSpeak read key, the OpenWeatherMap key, and the Gmail app password are all read from server-side Vercel environment variables and injected into outgoing requests inside their respective serverless functions (`chat.js`, `outdoor.js`, `alert.js`). The browser only ever talks to AirWatch's own `/api/*` endpoints, never to the third-party providers directly.
 
 ---
 
@@ -143,7 +156,9 @@ The Groq API key is **never exposed to the browser**. All AI requests go through
 | Cloud Platform | ThingSpeak |
 | Frontend | HTML5 / CSS3 / Vanilla JS |
 | Charts | Chart.js v4 |
-| AI | Groq API (llama-3.3-70b-versatile) |
+| AI | Groq API (`openai/gpt-oss-20b`) |
+| Outdoor data | OpenWeatherMap (weather + air pollution API) |
+| Email | Nodemailer + Gmail SMTP |
 | Backend | Vercel Serverless Functions |
 | Deployment | Vercel |
 
