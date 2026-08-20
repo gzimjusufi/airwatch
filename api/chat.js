@@ -409,7 +409,7 @@ Important:
         },
         body: JSON.stringify({
           model: 'openai/gpt-oss-20b',
-          max_tokens: 1500,
+          max_tokens: 1100,
           reasoning_effort: 'low',
           messages: [
             {
