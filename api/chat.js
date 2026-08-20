@@ -278,7 +278,7 @@ export default async function handler(req, res) {
 
     const sensorData = {
       channel_name: channel.name,
-      location: 'Palatica, Tetovo region, North Macedonia',
+      location: 'Tetovo region, North Macedonia',
       field_names: fieldNameMap,
       timezone: 'Europe/Skopje (all timestamps below are local Skopje time, not UTC)',
       // Most recent raw readings (for "current"/"live" questions)
@@ -409,7 +409,7 @@ Important:
         },
         body: JSON.stringify({
           model: 'openai/gpt-oss-20b',
-          max_tokens: 1100,
+          max_tokens: 900,
           reasoning_effort: 'low',
           messages: [
             {
