@@ -401,6 +401,7 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
   <div class="big-chart"><div class="chart-title">🌡 Temperature & 💧 Humidity</div><div class="big-chart-wrap"><canvas id="h-th"></canvas></div></div>
   <div class="big-chart"><div class="chart-title">🌿 CO₂ Levels (ppm)</div><div class="big-chart-wrap"><canvas id="h-co2"></canvas></div></div>
   <div class="big-chart"><div class="chart-title">💨 PM2.5 Particulate Matter (µg/m³)</div><div class="big-chart-wrap"><canvas id="h-pm"></canvas></div></div>
+  <div class="big-chart"><div class="chart-title">🔵 Pressure (hPa)</div><div class="big-chart-wrap"><canvas id="h-pres"></canvas></div></div>
   <div class="big-chart"><div class="chart-title">🔊 Sound Level (dB)</div><div class="big-chart-wrap"><canvas id="h-snd"></canvas></div></div>
 </div>
 </div>
@@ -930,10 +931,12 @@ function saveEn(id,v){enabled[id]=v;localStorage.setItem('en_'+id,v)}
     mk('h-th','Temp (°C)','#e74c3c','°C','Humidity (%)','#2980b9');
     mk('h-co2','CO₂ (ppm)','#27ae60','ppm');
     mk('h-pm','PM2.5','#d4a017',' µg/m³');
+    mk('h-pres','Pressure (hPa)','#8e44ad','hPa');
     mk('h-snd','Sound (dB)','#e91e8c',' dB');
     setChart(hcharts['h-th'],labels,vals('field1'),vals('field2'));
     setChart(hcharts['h-co2'],labels,c1);
     setChart(hcharts['h-pm'],labels,p1);
+    setChart(hcharts['h-pres'],labels,vals('field3'));
     setChart(hcharts['h-snd'],labels,vals('field6'));
   }catch(e){console.error(e)}
 }
