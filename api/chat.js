@@ -408,7 +408,7 @@ Important:
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'openai/gpt-oss-20b',
+          model: 'qwen/qwen-3.6-27b',
           max_tokens: 900,
           reasoning_effort: 'low',
           messages: [
