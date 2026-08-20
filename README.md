@@ -6,7 +6,7 @@
 
 ## 📸 Demo
 
-Live dashboard → **[your-project.vercel.app](https://your-project.vercel.app)**  
+Live dashboard → **[your-project.vercel.app](https://airwatch-rose.vercel.app)**  
 ThingSpeak Channel → **[#3389722](https://thingspeak.com/channels/3389722)**
 
 ---
@@ -83,7 +83,7 @@ ThingSpeak Channel → **[#3389722](https://thingspeak.com/channels/3389722)**
 - ✅ **Configurable alerts** with per-parameter threshold toggles and a running alert log
 - ✅ **Email notifications** — sent via a secure serverless function (Nodemailer + Gmail SMTP) when a threshold is exceeded
 - ✅ **Outdoor comparison** — live outdoor weather + air pollution data (OpenWeatherMap) shown side-by-side with indoor readings, including deltas
-- ✅ **AI chatbot** (AirWatch AI) powered by Groq (`openai/gpt-oss-20b`) — reads live and historical sensor context to answer natural-language questions
+- ✅ **AI chatbot** (AirWatch AI) powered by Groq (`qwen/qwen-3.6-27b`) — reads live and historical sensor context to answer natural-language questions
 - ✅ **Offline detection** — detects when the ESP32 has stopped sending data
 - ✅ **Dark mode** + mobile responsive
 - ✅ **Secure API proxies** — Groq, Gmail, and OpenWeatherMap credentials all stay server-side via Vercel environment variables
@@ -156,7 +156,7 @@ None of the third-party credentials are ever exposed to the browser. The Groq AP
 | Cloud Platform | ThingSpeak |
 | Frontend | HTML5 / CSS3 / Vanilla JS |
 | Charts | Chart.js v4 |
-| AI | Groq API (`openai/gpt-oss-20b`) |
+| AI | Groq API (`qwen/qwen-3.6-27b`) |
 | Outdoor data | OpenWeatherMap (weather + air pollution API) |
 | Email | Nodemailer + Gmail SMTP |
 | Backend | Vercel Serverless Functions |

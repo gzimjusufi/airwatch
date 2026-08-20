@@ -500,7 +500,7 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
       </div>
     </div>
 
-    <div class="arch-arrow-row"><div class="arch-arrow">↓ HTTP over Wi-Fi (every 15s)</div></div>
+    <div class="arch-arrow-row"><div class="arch-arrow">↓ HTTP over Wi-Fi (every 20s)</div></div>
 
     <!-- Layer 3: Cloud -->
     <div class="arch-layer">
@@ -514,7 +514,7 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
         <div class="arch-chip cloud">
           <div class="arch-chip-icon">🤖</div>
           <div class="arch-chip-name">Groq AI</div>
-          <div class="arch-chip-desc">qwen-3.6-27b<br>Chat API</div>
+          <div class="arch-chip-desc">qwen/qwen-3.6-27b<br>Chat API</div>
         </div>
       </div>
     </div>
@@ -575,7 +575,7 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
     <div class="about-card">
       <h3>🔄 Data Flow</h3>
       <div class="comp-list">
-        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">1. Sensing (every 15s)</div><div class="comp-desc">ESP32 polls all 5 sensors via I²C, UART and ADC</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">1. Sensing (every ~5s)</div><div class="comp-desc">ESP32 polls all 5 sensors via I²C, UART and ADC</div></div></div>
         <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">2. Local display</div><div class="comp-desc">Values shown instantly on OLED screen</div></div></div>
         <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">3. Cloud upload</div><div class="comp-desc">HTTP POST to ThingSpeak with all 6 field values</div></div></div>
         <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">4. Web fetch (every 30s)</div><div class="comp-desc">Dashboard pulls last 30 readings from ThingSpeak REST API</div></div></div>
@@ -632,7 +632,7 @@ footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--muted);font-f
     <div class="about-card">
       <h3>☁️ System Architecture</h3>
       <div class="comp-list">
-        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Data Collection</div><div class="comp-desc">ESP32 reads all 6 sensors every 15 seconds</div></div></div>
+        <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Data Collection</div><div class="comp-desc">ESP32 reads all 6 sensors every ~5 seconds, uploads to ThingSpeak every 20 seconds</div></div></div>
         <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Local Display</div><div class="comp-desc">OLED shows live readings instantly on-device</div></div></div>
         <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Cloud Upload</div><div class="comp-desc">Data pushed to ThingSpeak via HTTP over Wi-Fi</div></div></div>
         <div class="comp-item"><div class="comp-dot"></div><div><div class="comp-name">Web Dashboard</div><div class="comp-desc">This site — pulls ThingSpeak API, refreshes every 30s</div></div></div>
@@ -773,7 +773,7 @@ function mkChart(id,label,color,unit,label2,color2){
   const ctx=document.getElementById(id);if(!ctx)return null;
   const ds=[{label,data:[],borderColor:color,backgroundColor:color+'18',borderWidth:2,pointRadius:2,fill:true,tension:.4}];
   if(label2)ds.push({label:label2,data:[],borderColor:color2,backgroundColor:'transparent',borderWidth:1.5,pointRadius:2,fill:false,tension:.4,borderDash:[4,3]});
-  return new Chart(ctx,{type:'line',data:{labels:[],datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:!!label2,labels:{font:{size:11},boxWidth:12,padding:8}}},scales:{x:{ticks:{font:{size:10},maxTicksLimit:6,color:'#888'},grid:{color:'rgba(128,128,128,0.1)'}},y:{ticks:{font:{size:10},color:'#888',callback:v=>v+unit},grid:{color:'rgba(128,128,128,0.1)'}}}}});
+  return new Chart(ctx,{type:'line',data:{labels:[],datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:!!label2,labels:{font:{size:11},boxWidth:12,padding:8}}},scales:{x:{ticks:{font:{size:10},maxTicksLimit:6,color:'#888'},grid:{color:'rgba(128,128,128,0.1)'}},y:{ticks:{font:{size:10},color:'#888',callback:v=>(Math.round(v*100)/100)+unit},grid:{color:'rgba(128,128,128,0.1)'}}}}});
 }
 function setChart(c,labels,d1,d2){if(!c)return;c.data.labels=labels;c.data.datasets[0].data=d1;if(d2&&c.data.datasets[1])c.data.datasets[1].data=d2;c.update('none')}
 
