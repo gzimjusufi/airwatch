@@ -410,7 +410,7 @@ Important:
         body: JSON.stringify({
           model: 'qwen/qwen3.6-27b',
           max_tokens: 900,
-          reasoning_effort: 'low',
+          reasoning_effort: 'none',
           messages: [
             {
               role: 'system',
